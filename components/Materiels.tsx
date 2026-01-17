@@ -56,6 +56,34 @@ import ConfirmDialog from "../components/modals/ConfirmDialog";
 import { useConnectionStatus } from "@/hooks/useConnectionStatus";
 import { Materiel, useData } from "@/context/DataContext";
 
+// ============================================
+// FONCTION POUR SUPPRIMER IMAGE CLOUDINARY
+// ============================================
+const deleteFromCloudinary = async (publicId: string): Promise<boolean> => {
+  if (!publicId) {
+    console.warn("⚠️ No publicId to delete");
+    return false;
+  }
+
+  console.log("🗑️ Deleting from Cloudinary:", publicId);
+
+  try {
+    const res = await fetch("/api/cloudinary/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ publicId }),
+    });
+
+    const data = await res.json();
+    console.log("🗑️ Delete response:", data);
+
+    return res.ok;
+  } catch (error) {
+    console.error("❌ Cloudinary delete error:", error);
+    return false;
+  }
+};
+
 const Materiels: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -76,7 +104,7 @@ const Materiels: React.FC = () => {
   const [searchStatut, setSearchStatut] = useState<string>("");
 
   const getMaterielImage = (url: string | null) => {
-    if (!url) return ""; // pas d'image
+    if (!url) return "";
 
     // Cloudinary (URL directe)
     if (url.includes("res.cloudinary.com")) return url;
@@ -88,12 +116,13 @@ const Materiels: React.FC = () => {
 
     return "";
   };
+
   // Récupère les catégories depuis le localStorage
   const categoriesFromStorage = JSON.parse(
     localStorage.getItem("categorie") || "[]"
   ) as string[];
 
-  const filteredMateriels = materiels.filter((m:any) => {
+  const filteredMateriels = materiels.filter((m: any) => {
     const matchesNameOrRef =
       m.nom.toLowerCase().includes(search.toLowerCase()) ||
       m.reference.toLowerCase().includes(search.toLowerCase());
@@ -116,13 +145,35 @@ const Materiels: React.FC = () => {
     setMenuAnchor({ el: event.currentTarget, materiel });
   };
 
-
   const handleMenuClose = () => {
     setMenuAnchor(null);
   };
 
-  const confirmDelete = async (id: string) => {
-    await deleteMateriel(id);
+  // ✅ FONCTION CORRIGÉE - Supprime aussi l'image Cloudinary
+  const confirmDelete = async (materiel: Materiel) => {
+    if (!materiel.id) return;
+
+    try {
+      // 1️⃣ Supprimer l'image de Cloudinary si elle existe
+      if (materiel.imagePublicId) {
+        console.log("🗑️ Suppression image Cloudinary:", materiel.imagePublicId);
+        const deleted = await deleteFromCloudinary(materiel.imagePublicId);
+        
+        if (deleted) {
+          console.log("✅ Image Cloudinary supprimée");
+        } else {
+          console.warn("⚠️ Échec suppression image Cloudinary (continuons quand même)");
+        }
+      }
+
+      // 2️⃣ Supprimer le matériel de la base de données
+      await deleteMateriel(materiel.id);
+      console.log("✅ Matériel supprimé de la BDD");
+
+    } catch (error) {
+      console.error("❌ Erreur lors de la suppression:", error);
+      throw error;
+    }
   };
 
   // ✅ Code couleur conservé
@@ -156,15 +207,16 @@ const Materiels: React.FC = () => {
   const stats = {
     total: materiels.length,
     disponible: materiels.filter(
-      (m:any) => m.statut?.toLowerCase() === "disponible"
+      (m: any) => m.statut?.toLowerCase() === "disponible"
     ).length,
     enUtilisation: materiels.filter(
-      (m:any) => m.statut?.toLowerCase() === "en utilisation"
+      (m: any) => m.statut?.toLowerCase() === "en utilisation"
     ).length,
     maintenance: materiels.filter(
-      (m :any) => m.statut?.toLowerCase() === "maintenance"
+      (m: any) => m.statut?.toLowerCase() === "maintenance"
     ).length,
   };
+
   return (
     <Box
       sx={{
@@ -363,15 +415,13 @@ const Materiels: React.FC = () => {
         </Grid>
       </Box>
 
-      {/* Header amélioré */}
-
       {/* Barre de recherche stylisée */}
       <Fade in timeout={600}>
         <Paper
           elevation={0}
           sx={{
             mb: 4,
-            borderRadius: 4, // un peu plus arrondi
+            borderRadius: 4,
             overflow: "hidden",
             border: `1px solid ${alpha(theme.palette.divider, 0.15)}`,
             boxShadow: `0 6px 24px ${alpha(theme.palette.primary.main, 0.08)}`,
@@ -410,7 +460,6 @@ const Materiels: React.FC = () => {
                     </InputAdornment>
                   ),
                   sx: {
-                    // borderRadius: 4,
                     bgcolor: alpha(theme.palette.background.default, 0.15),
                     "&:hover": {
                       bgcolor: alpha(theme.palette.background.default, 0.2),
@@ -503,7 +552,7 @@ const Materiels: React.FC = () => {
           >
             <TableContainer
               sx={{
-                maxHeight: 470, // hauteur du body
+                maxHeight: 470,
                 overflowY: "auto",
               }}
             >
@@ -709,7 +758,7 @@ const Materiels: React.FC = () => {
           container
           spacing={2}
           sx={{
-            maxHeight: 470, // hauteur du body
+            maxHeight: 470,
             overflowY: "auto",
           }}
         >
@@ -1047,24 +1096,33 @@ const Materiels: React.FC = () => {
         onClose={() => setViewMateriel(null)}
         setEdit={() => {
           if (!viewMateriel) return;
-
-          setViewMateriel(null); // ferme la modal View
-          setEditMateriel(viewMateriel); // ouvre la modal Edit
+          setViewMateriel(null);
+          setEditMateriel(viewMateriel);
         }}
       />
 
+      {/* ✅ CONFIRM DIALOG CORRIGÉ */}
       <ConfirmDialog
         open={Boolean(deleteTarget)}
         isLoading={isLoading}
         title="Supprimer le matériel"
-        message={`Êtes-vous sûr de vouloir supprimer "${deleteTarget?.nom}" ?`}
+        message={`Êtes-vous sûr de vouloir supprimer "${deleteTarget?.nom}" ?${
+          deleteTarget?.imagePublicId 
+            ? "\n\n⚠️ L'image associée sera également supprimée de Cloudinary." 
+            : ""
+        }`}
         onConfirm={async () => {
+          if (!deleteTarget) return;
+          
           setIsLoading(true);
-          if (deleteTarget?.id) {
-            await confirmDelete(deleteTarget.id);
+          try {
+            await confirmDelete(deleteTarget);
+          } catch (error) {
+            console.error("Erreur suppression:", error);
+          } finally {
             setIsLoading(false);
+            setDeleteTarget(null);
           }
-          setDeleteTarget(null);
         }}
         onCancel={() => setDeleteTarget(null)}
       />
