@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useMemo, useCallback, memo } from "react";
 import {
   Box,
   Card,
@@ -27,8 +27,6 @@ import {
   alpha,
   Fade,
   Grow,
-  Tooltip,
-  Badge,
   Avatar,
 } from "@mui/material";
 import {
@@ -39,13 +37,9 @@ import {
   Delete,
   Visibility,
   Inventory2,
-  FilterList,
-  ViewModule,
-  ViewList,
   CheckCircle,
   Schedule,
   Build,
-  YoutubeSearchedFor,
   Restore,
   Landscape,
 } from "@mui/icons-material";
@@ -57,127 +51,372 @@ import { useConnectionStatus } from "@/hooks/useConnectionStatus";
 import { Materiel, useData } from "@/context/DataContext";
 
 // ============================================
-// FONCTION POUR SUPPRIMER IMAGE CLOUDINARY
+// 🚀 SUPPRESSION CLOUDINARY EN BACKGROUND (Fire & Forget)
 // ============================================
-const deleteFromCloudinary = async (publicId: string): Promise<boolean> => {
-  if (!publicId) {
-    console.warn("⚠️ No publicId to delete");
-    return false;
-  }
+const deleteFromCloudinaryAsync = (publicId: string | undefined) => {
+  if (!publicId) return;
 
-  console.log("🗑️ Deleting from Cloudinary:", publicId);
-
-  try {
-    const res = await fetch("/api/cloudinary/delete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ publicId }),
-    });
-
-    const data = await res.json();
-    console.log("🗑️ Delete response:", data);
-
-    return res.ok;
-  } catch (error) {
-    console.error("❌ Cloudinary delete error:", error);
-    return false;
-  }
+  // Fire and forget - ne bloque pas l'UI
+  fetch("/api/cloudinary/delete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ publicId }),
+  })
+    .then((res) => res.json())
+    .then((data) => console.log("🗑️ Cloudinary cleanup:", data))
+    .catch((err) => console.warn("⚠️ Cloudinary cleanup failed:", err));
 };
 
+// ============================================
+// 🚀 COMPOSANT LIGNE DE TABLE MEMOÏSÉ
+// ============================================
+const MaterielTableRow = memo(
+  ({
+    materiel,
+    index,
+    isAdmin,
+    isPoor,
+    onView,
+    onMenuOpen,
+    getStatusColor,
+    getStatusIconBg,
+    getMaterielImage,
+    theme,
+  }: any) => (
+    <Grow in timeout={Math.min(300 + index * 30, 600)} key={materiel.id}>
+      <TableRow
+        hover
+        sx={{
+          cursor: "pointer",
+          transition: "background 0.2s",
+          "&:hover": { bgcolor: alpha(theme.palette.primary.main, 0.04) },
+          "&:last-child td": { border: 0 },
+        }}
+        onClick={() => onView(materiel)}
+      >
+        <TableCell sx={{ py: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <Box
+              sx={{
+                width: 40,
+                height: 40,
+                borderRadius: 2,
+                bgcolor: getStatusIconBg(materiel.statut),
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "white",
+                overflow: "hidden",
+              }}
+            >
+              {isPoor || !materiel.imageUrl ? (
+                <Landscape fontSize="small" />
+              ) : (
+                <Box
+                  component="img"
+                  src={getMaterielImage(materiel.imageUrl)}
+                  alt=""
+                  loading="lazy"
+                  sx={{ width: 40, height: 40, objectFit: "cover" }}
+                />
+              )}
+            </Box>
+            <Typography fontWeight={600} fontSize="0.9rem">
+              {materiel.nom}
+            </Typography>
+          </Box>
+        </TableCell>
+        <TableCell>
+          <Chip
+            label={
+              `${materiel.reference} ${materiel.referenceNum || ""}`.trim() ||
+              "N/A"
+            }
+            size="small"
+            variant="outlined"
+            sx={{ borderRadius: 2, fontWeight: 500 }}
+          />
+        </TableCell>
+        <TableCell align="center">
+          <Box
+            sx={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 32,
+              height: 32,
+              borderRadius: 1.5,
+              bgcolor: alpha(theme.palette.info.main, 0.1),
+              color: theme.palette.info.dark,
+              fontWeight: 700,
+              fontSize: "0.85rem",
+            }}
+          >
+            {materiel.quantites}
+          </Box>
+        </TableCell>
+        <TableCell>
+          <Chip
+            label={materiel.statut || "Disponible"}
+            size="small"
+            color={getStatusColor(materiel.statut) as any}
+            sx={{ borderRadius: 2, fontWeight: 600 }}
+          />
+        </TableCell>
+        <TableCell align="right">
+          {isAdmin ? (
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                onMenuOpen(e, materiel);
+              }}
+            >
+              <MoreVert fontSize="small" />
+            </IconButton>
+          ) : (
+            <Typography
+              color="text.secondary"
+              fontSize="0.8rem"
+              sx={{
+                maxWidth: 150,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {materiel.description}
+            </Typography>
+          )}
+        </TableCell>
+      </TableRow>
+    </Grow>
+  )
+);
+
+MaterielTableRow.displayName = "MaterielTableRow";
+
+// ============================================
+// 🚀 COMPOSANT CARD MOBILE MEMOÏSÉ
+// ============================================
+const MaterielCard = memo(
+  ({
+    materiel,
+    index,
+    isAdmin,
+    isPoor,
+    onView,
+    onMenuOpen,
+    getStatusColor,
+    getStatusIconBg,
+    getMaterielImage,
+    theme,
+  }: any) => (
+    <Grid item xs={12} key={materiel.id}>
+      <Grow in timeout={Math.min(200 + index * 50, 500)}>
+        <Card
+          elevation={0}
+          sx={{
+            cursor: "pointer",
+            borderRadius: 3,
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            transition: "transform 0.2s, box-shadow 0.2s",
+            "&:hover": {
+              transform: "translateY(-2px)",
+              boxShadow: `0 6px 20px ${alpha(theme.palette.primary.main, 0.1)}`,
+            },
+            "&:active": { transform: "scale(0.99)" },
+            position: "relative",
+            "&::before": {
+              content: '""',
+              position: "absolute",
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: 4,
+              bgcolor: getStatusIconBg(materiel.statut),
+            },
+          }}
+          onClick={() => onView(materiel)}
+        >
+          <CardContent sx={{ p: 2 }}>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                <Box
+                  sx={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 2,
+                    bgcolor: getStatusIconBg(materiel.statut),
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "white",
+                    overflow: "hidden",
+                  }}
+                >
+                  {isPoor || !materiel.imageUrl ? (
+                    <Landscape fontSize="small" />
+                  ) : (
+                    <Box
+                      component="img"
+                      src={getMaterielImage(materiel.imageUrl)}
+                      alt=""
+                      loading="lazy"
+                      sx={{ width: 40, height: 40, objectFit: "cover" }}
+                    />
+                  )}
+                </Box>
+                <Box>
+                  <Typography fontWeight={600} fontSize="0.95rem">
+                    {materiel.nom}
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: 0.5, mt: 0.5 }}>
+                    <Chip
+                      label={materiel.reference}
+                      size="small"
+                      variant="outlined"
+                      sx={{ height: 20, fontSize: "0.65rem" }}
+                    />
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        px: 0.75,
+                        py: 0.25,
+                        borderRadius: 1,
+                        bgcolor: alpha(theme.palette.info.main, 0.1),
+                        color: theme.palette.info.dark,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {materiel.quantites}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-end",
+                  gap: 0.5,
+                }}
+              >
+                <Chip
+                  label={materiel.statut || "Disponible"}
+                  size="small"
+                  color={getStatusColor(materiel.statut) as any}
+                  sx={{ borderRadius: 2, fontWeight: 600 }}
+                />
+                {isAdmin && (
+                  <IconButton
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onMenuOpen(e, materiel);
+                    }}
+                  >
+                    <MoreVert fontSize="small" />
+                  </IconButton>
+                )}
+              </Box>
+            </Box>
+          </CardContent>
+        </Card>
+      </Grow>
+    </Grid>
+  )
+);
+
+MaterielCard.displayName = "MaterielCard";
+
+// ============================================
+// 🚀 COMPOSANT PRINCIPAL OPTIMISÉ
+// ============================================
 const Materiels: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const { materiels, deleteMateriel } = useData();
   const { isAdmin } = useAuth();
   const { isPoor } = useConnectionStatus();
+
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editMateriel, setEditMateriel] = useState<Materiel | null>(null);
   const [viewMateriel, setViewMateriel] = useState<Materiel | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Materiel | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<{
     el: HTMLElement;
     materiel: Materiel;
   } | null>(null);
-  const [searchCategorie, setSearchCategorie] = useState<string>("");
-  const [searchStatut, setSearchStatut] = useState<string>("");
-
-  const getMaterielImage = (url: string | null) => {
-    if (!url) return "";
-
-    // Cloudinary (URL directe)
-    if (url.includes("res.cloudinary.com")) return url;
-
-    // Google Drive
-    const match = url.match(/id=([a-zA-Z0-9_-]+)/);
-    if (match)
-      return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w400`;
-
-    return "";
-  };
-
-  // Récupère les catégories depuis le localStorage
-  const categoriesFromStorage = JSON.parse(
-    localStorage.getItem("categorie") || "[]"
-  ) as string[];
-
-  const filteredMateriels = materiels.filter((m: any) => {
-    const matchesNameOrRef =
-      m.nom.toLowerCase().includes(search.toLowerCase()) ||
-      m.reference.toLowerCase().includes(search.toLowerCase());
-
-    const matchesCategorie =
-      searchCategorie === "" || m.comentaire === searchCategorie;
-
-    const matchesStatut =
-      searchStatut === "" ||
-      m.statut?.toLowerCase() === searchStatut.toLowerCase();
-
-    return matchesNameOrRef && matchesCategorie && matchesStatut;
-  });
-
-  const handleMenuOpen = (
-    event: React.MouseEvent<HTMLElement>,
-    materiel: Materiel
-  ) => {
-    event.stopPropagation();
-    setMenuAnchor({ el: event.currentTarget, materiel });
-  };
-
-  const handleMenuClose = () => {
-    setMenuAnchor(null);
-  };
-
-  // ✅ FONCTION CORRIGÉE - Supprime aussi l'image Cloudinary
-  const confirmDelete = async (materiel: Materiel) => {
-    if (!materiel.id) return;
-
+  const [searchCategorie, setSearchCategorie] = useState("");
+  const [searchStatut, setSearchStatut] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  // ✅ Memoize categories (évite la lecture localStorage à chaque render)
+  const categoriesFromStorage = useMemo(() => {
+    if (typeof window === "undefined") return [];
     try {
-      // 1️⃣ Supprimer l'image de Cloudinary si elle existe
-      if (materiel.imagePublicId) {
-        console.log("🗑️ Suppression image Cloudinary:", materiel.imagePublicId);
-        const deleted = await deleteFromCloudinary(materiel.imagePublicId);
-        
-        if (deleted) {
-          console.log("✅ Image Cloudinary supprimée");
-        } else {
-          console.warn("⚠️ Échec suppression image Cloudinary (continuons quand même)");
-        }
-      }
-
-      // 2️⃣ Supprimer le matériel de la base de données
-      await deleteMateriel(materiel.id);
-      console.log("✅ Matériel supprimé de la BDD");
-
-    } catch (error) {
-      console.error("❌ Erreur lors de la suppression:", error);
-      throw error;
+      return JSON.parse(localStorage.getItem("categorie") || "[]") as string[];
+    } catch {
+      return [];
     }
-  };
+  }, []);
 
-  // ✅ Code couleur conservé
-  const getStatusColor = (statut: string) => {
+  // ✅ Memoize filtered materiels
+  const filteredMateriels = useMemo(() => {
+    const searchLower = search.toLowerCase();
+    const statutLower = searchStatut.toLowerCase();
+
+    return materiels.filter((m) => {
+      if (searchCategorie && m.comentaire !== searchCategorie) return false;
+      if (statutLower && m.statut?.toLowerCase() !== statutLower) return false;
+      if (searchLower) {
+        return (
+          m.nom.toLowerCase().includes(searchLower) ||
+          m.reference.toLowerCase().includes(searchLower)
+        );
+      }
+      return true;
+    });
+  }, [materiels, search, searchCategorie, searchStatut]);
+
+  // ✅ Memoize stats
+  const stats = useMemo(() => {
+    const result = {
+      total: 0,
+      disponible: 0,
+      enUtilisation: 0,
+      maintenance: 0,
+    };
+
+    for (const m of materiels) {
+      result.total++;
+      const statut = m.statut?.toLowerCase();
+      if (statut === "disponible") result.disponible++;
+      else if (statut === "en utilisation") result.enUtilisation++;
+      else if (statut === "maintenance") result.maintenance++;
+    }
+
+    return result;
+  }, [materiels]);
+
+  // ✅ Memoize helper functions
+  const getMaterielImage = useCallback((url: string | null) => {
+    if (!url) return "";
+    if (url.includes("res.cloudinary.com")) return url;
+    const match = url.match(/id=([a-zA-Z0-9_-]+)/);
+    return match
+      ? `https://drive.google.com/thumbnail?id=${match[1]}&sz=w400`
+      : "";
+  }, []);
+
+  const getStatusColor = useCallback((statut: string) => {
     switch (statut?.toLowerCase()) {
       case "disponible":
         return "success";
@@ -188,34 +427,91 @@ const Materiels: React.FC = () => {
       default:
         return "default";
     }
-  };
+  }, []);
 
-  // Couleurs personnalisées pour les icônes selon le statut
-  const getStatusIconBg = (statut: string) => {
-    switch (statut?.toLowerCase()) {
-      case "disponible":
-        return theme.palette.success.main;
-      case "en utilisation":
-        return theme.palette.warning.main;
-      case "maintenance":
-        return theme.palette.error.main;
-      default:
-        return theme.palette.primary.main;
+  const getStatusIconBg = useCallback(
+    (statut: string) => {
+      switch (statut?.toLowerCase()) {
+        case "disponible":
+          return theme.palette.success.main;
+        case "en utilisation":
+          return theme.palette.warning.main;
+        case "maintenance":
+          return theme.palette.error.main;
+        default:
+          return theme.palette.primary.main;
+      }
+    },
+    [theme]
+  );
+
+  // ✅ Handlers memoïsés
+  const handleMenuOpen = useCallback(
+    (e: React.MouseEvent<HTMLElement>, materiel: Materiel) => {
+      e.stopPropagation();
+      setMenuAnchor({ el: e.currentTarget, materiel });
+    },
+    []
+  );
+
+  const handleMenuClose = useCallback(() => setMenuAnchor(null), []);
+
+  const handleView = useCallback(
+    (materiel: Materiel) => setViewMateriel(materiel),
+    []
+  );
+
+  const handleResetFilters = useCallback(() => {
+    setSearch("");
+    setSearchCategorie("");
+    setSearchStatut("");
+  }, []);
+
+  // ✅ 🚀 SUPPRESSION ULTRA-RAPIDE (Optimistic UI)
+  const handleConfirmDelete = useCallback(async () => {
+    if (!deleteTarget?.id) return;
+
+    const materielToDelete = deleteTarget;
+
+    // 1️⃣ FERMER IMMÉDIATEMENT LE DIALOG (UI instantanée)
+    setDeleteTarget(null);
+    setIsLoading(true)
+    try {
+      // 2️⃣ Supprimer de Firestore (opération principale)
+      await deleteMateriel(materielToDelete.id);
+
+      // 3️⃣ Supprimer de Cloudinary EN BACKGROUND (fire & forget)
+      deleteFromCloudinaryAsync(materielToDelete.imagePublicId);
+      setIsLoading(false)
+    } catch (error) {
+      console.error("❌ Erreur suppression:", error);
+      // TODO: Afficher un toast d'erreur si nécessaire
     }
-  };
+  }, [deleteTarget, deleteMateriel]);
 
-  const stats = {
-    total: materiels.length,
-    disponible: materiels.filter(
-      (m: any) => m.statut?.toLowerCase() === "disponible"
-    ).length,
-    enUtilisation: materiels.filter(
-      (m: any) => m.statut?.toLowerCase() === "en utilisation"
-    ).length,
-    maintenance: materiels.filter(
-      (m: any) => m.statut?.toLowerCase() === "maintenance"
-    ).length,
-  };
+  // ✅ Props communes pour les rows/cards
+  const commonProps = useMemo(
+    () => ({
+      isAdmin,
+      isPoor,
+      onView: handleView,
+      onMenuOpen: handleMenuOpen,
+      getStatusColor,
+      getStatusIconBg,
+      getMaterielImage,
+      theme,
+    }),
+    [
+      isAdmin,
+      isPoor,
+      handleView,
+      handleMenuOpen,
+      getStatusColor,
+      getStatusIconBg,
+      getMaterielImage,
+      theme,
+    ]
+  );
 
   return (
     <Box
@@ -224,10 +520,11 @@ const Materiels: React.FC = () => {
         background: `linear-gradient(135deg, ${alpha(
           theme.palette.primary.main,
           0.03
-        )} 100%, ${alpha(theme.palette.secondary.main, 0.03)} 100%)`,
+        )} 0%, ${alpha(theme.palette.secondary.main, 0.03)} 100%)`,
         p: { xs: 2, md: 4 },
       }}
     >
+      {/* ============ HEADER ============ */}
       <Box
         sx={{
           borderRadius: { xs: 0, md: 4 },
@@ -276,33 +573,24 @@ const Materiels: React.FC = () => {
             zIndex: 1,
           }}
         >
-          <Box>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}>
-              <Avatar
-                sx={{
-                  width: 56,
-                  height: 56,
-                  bgcolor: "rgba(255,255,255,0.2)",
-                  backdropFilter: "blur(10px)",
-                }}
-              >
-                <Inventory2 sx={{ fontSize: 28 }} />
-              </Avatar>
-              <Box>
-                <Typography
-                  variant="h4"
-                  sx={{
-                    fontWeight: 800,
-                    color: "white",
-                    textShadow: "0 2px 10px rgba(0,0,0,0.1)",
-                  }}
-                >
-                  Matériels
-                </Typography>
-                <Typography sx={{ color: "rgba(255,255,255,0.9)" }}>
-                  Gérez votre inventaire de matériels
-                </Typography>
-              </Box>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <Avatar
+              sx={{
+                width: 56,
+                height: 56,
+                bgcolor: "rgba(255,255,255,0.2)",
+                backdropFilter: "blur(10px)",
+              }}
+            >
+              <Inventory2 sx={{ fontSize: 28 }} />
+            </Avatar>
+            <Box>
+              <Typography variant="h4" sx={{ fontWeight: 800, color: "white" }}>
+                Matériels
+              </Typography>
+              <Typography sx={{ color: "rgba(255,255,255,0.9)" }}>
+                Gérez votre inventaire
+              </Typography>
             </Box>
           </Box>
 
@@ -314,19 +602,17 @@ const Materiels: React.FC = () => {
               disabled={isPoor}
               sx={{
                 bgcolor: "white",
-                color: "primary",
+                color: "#818660",
                 fontWeight: 600,
                 px: 3,
                 py: 1.2,
                 borderRadius: 2.5,
                 textTransform: "none",
-                boxShadow: "0 4px 15px rgba(0,0,0,0.2)",
                 "&:hover": {
                   bgcolor: "#f8f8f6",
                   transform: "translateY(-2px)",
-                  boxShadow: "0 6px 20px rgba(0,0,0,0.25)",
                 },
-                transition: "all 0.3s ease",
+                transition: "all 0.2s",
               }}
             >
               Nouveau matériel
@@ -334,7 +620,7 @@ const Materiels: React.FC = () => {
           )}
         </Box>
 
-        {/* Stats Cards */}
+        {/* Stats */}
         <Grid
           container
           spacing={2}
@@ -365,39 +651,32 @@ const Materiels: React.FC = () => {
               icon: <Build />,
               color: "#a67c52",
             },
-          ].map((stat, index) => (
-            <Grid item xs={12} sm={6} xl={3} key={index}>
+          ].map((stat, i) => (
+            <Grid item xs={6} sm={6} xl={3} key={i}>
               <Paper
                 elevation={0}
                 sx={{
-                  p: 2,
+                  p: 1.5,
                   borderRadius: 3,
                   bgcolor: "rgba(255,255,255,0.15)",
                   backdropFilter: "blur(10px)",
                   border: "1px solid rgba(255,255,255,0.2)",
-                  transition: "all 0.3s ease",
-                  "&:hover": {
-                    bgcolor: "rgba(255,255,255,0.2)",
-                    transform: "translateY(-2px)",
-                  },
                 }}
               >
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <Avatar
                     sx={{
-                      width: 40,
-                      height: 40,
-                      bgcolor:
-                        index === 0 ? "rgba(255,255,255,0.2)" : stat.color,
-                      boxShadow: `0 4px 12px ${stat.color}40`,
+                      width: 36,
+                      height: 36,
+                      bgcolor: i === 0 ? "rgba(255,255,255,0.2)" : stat.color,
                     }}
                   >
                     {stat.icon}
                   </Avatar>
                   <Box>
                     <Typography
-                      variant="h5"
-                      sx={{ fontWeight: 700, color: "white" }}
+                      variant="h6"
+                      sx={{ fontWeight: 700, color: "white", lineHeight: 1.2 }}
                     >
                       {stat.value}
                     </Typography>
@@ -415,623 +694,186 @@ const Materiels: React.FC = () => {
         </Grid>
       </Box>
 
-      {/* Barre de recherche stylisée */}
-      <Fade in timeout={600}>
-        <Paper
+      {/* ============ FILTRES ============ */}
+      <Paper
+        elevation={0}
+        sx={{
+          mb: 3,
+          borderRadius: 3,
+          border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+          p: 2,
+          bgcolor: alpha(theme.palette.background.paper, 0.9),
+        }}
+      >
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} md={4}>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Rechercher..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search sx={{ color: "text.secondary" }} />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+            />
+          </Grid>
+          <Grid item xs={6} md={3}>
+            <TextField
+              select
+              fullWidth
+              size="small"
+              label="Catégorie"
+              value={searchCategorie}
+              onChange={(e) => setSearchCategorie(e.target.value)}
+              sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+            >
+              <MenuItem value="">Toutes</MenuItem>
+              {categoriesFromStorage.map((cat) => (
+                <MenuItem key={cat} value={cat}>
+                  {cat}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid item xs={5} md={3}>
+            <TextField
+              select
+              fullWidth
+              size="small"
+              label="Statut"
+              value={searchStatut}
+              onChange={(e) => setSearchStatut(e.target.value)}
+              sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+            >
+              <MenuItem value="">Tous</MenuItem>
+              <MenuItem value="Disponible">Disponible</MenuItem>
+              <MenuItem value="En utilisation">En utilisation</MenuItem>
+              <MenuItem value="Maintenance">Maintenance</MenuItem>
+            </TextField>
+          </Grid>
+          <Grid
+            item
+            xs={1}
+            md={2}
+            sx={{ display: "flex", justifyContent: "flex-end" }}
+          >
+            <IconButton onClick={handleResetFilters} size="small">
+              <Restore />
+            </IconButton>
+          </Grid>
+        </Grid>
+      </Paper>
+
+      {/* ============ TABLE DESKTOP ============ */}
+      {!isMobile && filteredMateriels.length > 0 && (
+        <TableContainer
+          component={Paper}
           elevation={0}
           sx={{
-            mb: 4,
-            borderRadius: 4,
-            overflow: "hidden",
-            border: `1px solid ${alpha(theme.palette.divider, 0.15)}`,
-            boxShadow: `0 6px 24px ${alpha(theme.palette.primary.main, 0.08)}`,
-            p: 1,
-            transition: "all 0.3s ease",
-            "&:hover": {
-              boxShadow: `0 8px 28px ${alpha(
-                theme.palette.primary.main,
-                0.15
-              )}`,
-            },
-            bgcolor: alpha(theme.palette.background.paper, 0.9),
+            borderRadius: 3,
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            maxHeight: 500,
           }}
         >
-          <Grid
-            container
-            alignItems="center"
-            justifyContent={"space-between"}
-            p={1}
-            gap={2}
-          >
-            {/* Input de recherche */}
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                placeholder="🔍 Rechercher un matériel par nom ou référence..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                sx={{
-                  "& .MuiOutlinedInput-root": { borderRadius: 3 },
-                }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Search sx={{ color: "text.secondary", ml: 1 }} />
-                    </InputAdornment>
-                  ),
-                  sx: {
-                    bgcolor: alpha(theme.palette.background.default, 0.15),
-                    "&:hover": {
-                      bgcolor: alpha(theme.palette.background.default, 0.2),
-                    },
-                    "&.Mui-focused": {
-                      bgcolor: alpha(theme.palette.background.default, 0.25),
-                    },
-                  },
-                }}
-              />
-            </Grid>
-
-            {/* Select catégorie */}
-            <Grid item xs={12} md={3}>
-              <TextField
-                select
-                fullWidth
-                label="Catégorie"
-                value={searchCategorie}
-                onChange={(e) => setSearchCategorie(e.target.value)}
-                sx={{
-                  "& .MuiOutlinedInput-root": { borderRadius: 3 },
-                }}
-              >
-                <MenuItem value="">Toutes</MenuItem>
-                {categoriesFromStorage.map((cat) => (
-                  <MenuItem key={cat} value={cat}>
-                    {cat}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-
-            {/* Select statut */}
-            <Grid item xs={9} md={3}>
-              <TextField
-                select
-                fullWidth
-                label="Statut"
-                value={searchStatut}
-                onChange={(e) => setSearchStatut(e.target.value)}
-                sx={{
-                  "& .MuiOutlinedInput-root": { borderRadius: 3 },
-                }}
-              >
-                <MenuItem value="">Tous</MenuItem>
-                <MenuItem value="Disponible">Disponible</MenuItem>
-                <MenuItem value="En utilisation">En utilisation</MenuItem>
-                <MenuItem value="Maintenance">Maintenance</MenuItem>
-              </TextField>
-            </Grid>
-
-            {/* Bouton réinitialiser */}
-            <Grid item xs={2} md={1}>
-              <IconButton
-                sx={{
-                  "&:hover": {
-                    backgroundColor: alpha(theme.palette.primary.main, 0.05),
-                  },
-                  boxShadow: 2,
-                }}
-                onClick={() => {
-                  setSearch("");
-                  setSearchCategorie("");
-                  setSearchStatut("");
-                }}
-              >
-                <Restore />
-              </IconButton>
-            </Grid>
-          </Grid>
-        </Paper>
-      </Fade>
-
-      {/* Table View pour Desktop */}
-      {!isMobile && filteredMateriels.length > 0 && (
-        <Fade in timeout={700}>
-          <TableContainer
-            component={Paper}
-            elevation={0}
-            sx={{
-              borderRadius: 4,
-              border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-              boxShadow: `0 4px 30px ${alpha(
-                theme.palette.primary.main,
-                0.06
-              )}`,
-              overflow: "hidden",
-            }}
-          >
-            <TableContainer
-              sx={{
-                maxHeight: 470,
-                overflowY: "auto",
-              }}
-            >
-              <Table stickyHeader size="small">
-                <TableHead>
-                  <TableRow
-                    sx={{
-                      background: `linear-gradient(90deg, ${alpha(
-                        theme.palette.primary.main,
-                        0.05
-                      )} 0%, ${alpha(
-                        theme.palette.secondary.main,
-                        0.05
-                      )} 100%)`,
-                    }}
-                  >
-                    <TableCell
-                      sx={{ fontWeight: 700, py: 2.5, fontSize: "0.9rem" }}
-                    >
-                      Nom
-                    </TableCell>
-                    <TableCell
-                      sx={{ fontWeight: 700, py: 2.5, fontSize: "0.9rem" }}
-                    >
-                      Référence
-                    </TableCell>
-                    <TableCell
-                      align="center"
-                      sx={{ fontWeight: 700, py: 2.5, fontSize: "0.9rem" }}
-                    >
-                      Quantité
-                    </TableCell>
-                    <TableCell
-                      sx={{ fontWeight: 700, py: 2.5, fontSize: "0.9rem" }}
-                    >
-                      Statut
-                    </TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{ fontWeight: 700, py: 2.5, fontSize: "0.9rem" }}
-                    >
-                      {isAdmin ? "Actions" : "Description"}
-                    </TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {filteredMateriels.map((materiel, index) => (
-                    <Grow in timeout={300 + index * 50} key={materiel.id}>
-                      <TableRow
-                        hover
-                        sx={{
-                          cursor: "pointer",
-                          transition: "all 0.3s ease",
-                          "&:hover": {
-                            bgcolor: alpha(theme.palette.primary.main, 0.04),
-                            transform: "scale(1.001)",
-                          },
-                          "&:last-child td": { border: 0 },
-                        }}
-                        onClick={() => setViewMateriel(materiel)}
-                      >
-                        <TableCell sx={{ py: 2.5 }}>
-                          <Box
-                            sx={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 2,
-                            }}
-                          >
-                            <Box
-                              sx={{
-                                width: 44,
-                                minWidth: 44,
-                                minHeight: 44,
-                                height: 44,
-                                borderRadius: 2.5,
-                                background: `linear-gradient(135deg, ${getStatusIconBg(
-                                  materiel.statut
-                                )} 0%, ${alpha(
-                                  getStatusIconBg(materiel.statut),
-                                  0.7
-                                )} 100%)`,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                color: "white",
-                              }}
-                            >
-                              {isPoor ||
-                              !navigator.onLine ||
-                              !materiel.imageUrl ? (
-                                <Landscape fontSize="small" />
-                              ) : (
-                                <Box
-                                  component="img"
-                                  src={getMaterielImage(materiel.imageUrl)}
-                                  alt={materiel.nom}
-                                  sx={{
-                                    width: 44,
-                                    height: 44,
-                                    borderRadius: "50%",
-                                  }}
-                                />
-                              )}
-                            </Box>
-                            <Typography fontWeight={600} fontSize="0.95rem">
-                              {materiel.nom}
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={
-                              materiel.reference +
-                                " " +
-                                (materiel.referenceNum || "") || "N/A"
-                            }
-                            size="small"
-                            variant="outlined"
-                            sx={{
-                              borderRadius: 2,
-                              fontWeight: 500,
-                              borderColor: alpha(
-                                theme.palette.primary.main,
-                                0.3
-                              ),
-                              bgcolor: alpha(theme.palette.primary.main, 0.05),
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell align="center">
-                          <Box
-                            sx={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              width: 36,
-                              height: 36,
-                              borderRadius: 2,
-                              bgcolor: alpha(theme.palette.info.main, 0.1),
-                              color: theme.palette.info.dark,
-                              fontWeight: 700,
-                            }}
-                          >
-                            {materiel.quantites}
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={materiel.statut || "Disponible"}
-                            size="small"
-                            color={getStatusColor(materiel.statut) as any}
-                            sx={{
-                              borderRadius: 2,
-                              fontWeight: 600,
-                              px: 1,
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell align="right">
-                          {isAdmin ? (
-                            <IconButton
-                              size="small"
-                              onClick={(e) => handleMenuOpen(e, materiel)}
-                              sx={{
-                                bgcolor: "action.hover",
-                                "&:hover": {
-                                  bgcolor: "action.selected",
-                                },
-                              }}
-                            >
-                              <MoreVert fontSize="small" />
-                            </IconButton>
-                          ) : (
-                            <Typography
-                              fontWeight={500}
-                              color="text.secondary"
-                              fontSize="0.875rem"
-                              sx={{
-                                maxWidth: 200,
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              {materiel.description}
-                            </Typography>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    </Grow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </TableContainer>
-        </Fade>
+          <Table stickyHeader size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 700, py: 2 }}>Nom</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Référence</TableCell>
+                <TableCell align="center" sx={{ fontWeight: 700 }}>
+                  Qté
+                </TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Statut</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700 }}>
+                  {isAdmin ? "Actions" : "Description"}
+                </TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {filteredMateriels.map((materiel, index) => (
+                <MaterielTableRow
+                  key={materiel.id}
+                  materiel={materiel}
+                  index={index}
+                  {...commonProps}
+                />
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
       )}
 
-      {/* Card View pour Mobile */}
-      {isMobile && (
+      {/* ============ CARDS MOBILE ============ */}
+      {isMobile && filteredMateriels.length > 0 && (
         <Grid
           container
-          spacing={2}
-          sx={{
-            maxHeight: 470,
-            overflowY: "auto",
-          }}
+          spacing={1.5}
+          sx={{ maxHeight: 500, overflowY: "auto" }}
         >
           {filteredMateriels.map((materiel, index) => (
-            <Grid item xs={12} key={materiel.id}>
-              <Grow in timeout={300 + index * 100}>
-                <Card
-                  elevation={0}
-                  sx={{
-                    cursor: "pointer",
-                    borderRadius: 3,
-                    border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-                    boxShadow: `0 4px 20px ${alpha(
-                      theme.palette.primary.main,
-                      0.06
-                    )}`,
-                    transition: "all 0.3s ease",
-                    "&:hover": {
-                      transform: "translateY(-4px)",
-                      boxShadow: `0 8px 30px ${alpha(
-                        theme.palette.primary.main,
-                        0.12
-                      )}`,
-                    },
-                    "&:active": {
-                      transform: "scale(0.98)",
-                    },
-                    overflow: "hidden",
-                    position: "relative",
-                    "&::before": {
-                      content: '""',
-                      position: "absolute",
-                      left: 0,
-                      top: 0,
-                      bottom: 0,
-                      width: 4,
-                      bgcolor: getStatusIconBg(materiel.statut),
-                    },
-                  }}
-                  onClick={() => setViewMateriel(materiel)}
-                >
-                  <CardContent sx={{ p: 2.5 }}>
-                    <Box
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                      }}
-                    >
-                      <Box
-                        sx={{ display: "flex", alignItems: "center", gap: 2 }}
-                      >
-                        <Box
-                          sx={{
-                            width: 44,
-                            minWidth: 44,
-                            minHeight: 44,
-                            height: 44,
-                            borderRadius: 2.5,
-                            background: `linear-gradient(135deg, ${getStatusIconBg(
-                              materiel.statut
-                            )} 0%, ${alpha(
-                              getStatusIconBg(materiel.statut),
-                              0.7
-                            )} 100%)`,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            color: "white",
-                          }}
-                        >
-                          {isPoor || !navigator.onLine || !materiel.imageUrl ? (
-                            <Landscape fontSize="small" />
-                          ) : (
-                            <Box
-                              component="img"
-                              src={getMaterielImage(materiel.imageUrl)}
-                              alt={materiel.nom}
-                              sx={{
-                                width: 44,
-                                height: 44,
-                                borderRadius: "50%",
-                              }}
-                            />
-                          )}
-                        </Box>
-                        <Box>
-                          <Typography fontWeight={700} fontSize="1rem">
-                            {materiel.nom}
-                          </Typography>
-                          <Box
-                            sx={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 1,
-                              mt: 0.5,
-                            }}
-                          >
-                            <Chip
-                              label={
-                                materiel.reference + " " + materiel.referenceNum
-                              }
-                              size="small"
-                              variant="outlined"
-                              sx={{
-                                height: 22,
-                                fontSize: "0.7rem",
-                                borderRadius: 1.5,
-                              }}
-                            />
-                            <Typography
-                              variant="caption"
-                              sx={{
-                                px: 1,
-                                py: 0.25,
-                                borderRadius: 1,
-                                bgcolor: alpha(theme.palette.info.main, 0.1),
-                                color: theme.palette.info.dark,
-                                fontWeight: 600,
-                              }}
-                            >
-                              {materiel.quantites} unités
-                            </Typography>
-                          </Box>
-                        </Box>
-                      </Box>
-
-                      <Box
-                        sx={{
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "flex-end",
-                          gap: 1,
-                        }}
-                      >
-                        <Chip
-                          label={materiel.statut || "Disponible"}
-                          size="small"
-                          color={getStatusColor(materiel.statut) as any}
-                          sx={{ borderRadius: 2, fontWeight: 600 }}
-                        />
-                        {isAdmin && (
-                          <IconButton
-                            size="small"
-                            onClick={(e) => handleMenuOpen(e, materiel)}
-                            sx={{
-                              bgcolor: "action.hover",
-                              "&:hover": {
-                                bgcolor: "action.selected",
-                              },
-                            }}
-                          >
-                            <MoreVert fontSize="small" />
-                          </IconButton>
-                        )}
-                      </Box>
-                    </Box>
-                  </CardContent>
-                </Card>
-              </Grow>
-            </Grid>
+            <MaterielCard
+              key={materiel.id}
+              materiel={materiel}
+              index={index}
+              {...commonProps}
+            />
           ))}
         </Grid>
       )}
 
-      {/* Empty State */}
+      {/* ============ EMPTY STATE ============ */}
       {filteredMateriels.length === 0 && (
-        <Fade in timeout={500}>
-          <Paper
-            elevation={0}
+        <Paper
+          elevation={0}
+          sx={{
+            textAlign: "center",
+            py: 8,
+            borderRadius: 4,
+            border: `2px dashed ${alpha(theme.palette.divider, 0.3)}`,
+          }}
+        >
+          <Inventory2
             sx={{
-              textAlign: "center",
-              py: 10,
-              px: 4,
-              borderRadius: 4,
-              border: `2px dashed ${alpha(theme.palette.divider, 0.3)}`,
-              background: `linear-gradient(135deg, ${alpha(
-                theme.palette.grey[100],
-                0.5
-              )} 0%, ${alpha(theme.palette.grey[50], 0.5)} 100%)`,
+              fontSize: 48,
+              color: alpha(theme.palette.primary.main, 0.3),
+              mb: 2,
             }}
-          >
-            <Box
-              sx={{
-                width: 100,
-                height: 100,
-                borderRadius: "50%",
-                bgcolor: alpha(theme.palette.primary.main, 0.1),
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                mx: "auto",
-                mb: 3,
-              }}
+          />
+          <Typography variant="h6" color="text.secondary" gutterBottom>
+            Aucun matériel trouvé
+          </Typography>
+          <Typography color="text.secondary" sx={{ mb: 3 }}>
+            {search
+              ? "Modifiez vos critères de recherche"
+              : "Ajoutez votre premier matériel"}
+          </Typography>
+          {isAdmin && !search && (
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={() => setShowForm(true)}
             >
-              <Inventory2
-                sx={{
-                  fontSize: 48,
-                  color: alpha(theme.palette.primary.main, 0.5),
-                }}
-              />
-            </Box>
-            <Typography
-              variant="h5"
-              fontWeight={700}
-              color="text.secondary"
-              gutterBottom
-            >
-              Aucun matériel trouvé
-            </Typography>
-            <Typography
-              color="text.secondary"
-              sx={{ mb: 3, maxWidth: 400, mx: "auto" }}
-            >
-              {search
-                ? "Essayez de modifier vos critères de recherche"
-                : "Commencez par ajouter votre premier matériel à l'inventaire"}
-            </Typography>
-            {isAdmin && (
-              <Button
-                variant="contained"
-                startIcon={<Add />}
-                onClick={() => setShowForm(true)}
-                sx={{
-                  px: 4,
-                  py: 1.5,
-                  borderRadius: 3,
-                  fontWeight: 600,
-                  boxShadow: `0 4px 15px ${alpha(
-                    theme.palette.primary.main,
-                    0.4
-                  )}`,
-                  "&:hover": {
-                    transform: "translateY(-2px)",
-                    boxShadow: `0 6px 20px ${alpha(
-                      theme.palette.primary.main,
-                      0.5
-                    )}`,
-                  },
-                  transition: "all 0.3s ease",
-                }}
-              >
-                Ajouter un matériel
-              </Button>
-            )}
-          </Paper>
-        </Fade>
+              Ajouter
+            </Button>
+          )}
+        </Paper>
       )}
 
-      {/* Context Menu stylisé */}
+      {/* ============ MENU CONTEXTUEL ============ */}
       <Menu
         anchorEl={menuAnchor?.el}
         open={Boolean(menuAnchor)}
         onClose={handleMenuClose}
         PaperProps={{
-          elevation: 0,
-          sx: {
-            borderRadius: 3,
-            minWidth: 180,
-            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-            boxShadow: `0 10px 40px ${alpha("#000", 0.15)}`,
-            "& .MuiMenuItem-root": {
-              py: 1.5,
-              px: 2,
-              mx: 1,
-              my: 0.5,
-              borderRadius: 2,
-              transition: "all 0.2s ease",
-            },
-          },
+          elevation: 3,
+          sx: { borderRadius: 2, minWidth: 160 },
         }}
-        transformOrigin={{ horizontal: "right", vertical: "top" }}
-        anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
       >
         <MenuItem
           onClick={() => {
@@ -1042,9 +884,7 @@ const Materiels: React.FC = () => {
           <ListItemIcon>
             <Visibility fontSize="small" color="primary" />
           </ListItemIcon>
-          <ListItemText primaryTypographyProps={{ fontWeight: 500 }}>
-            Voir
-          </ListItemText>
+          <ListItemText>Voir</ListItemText>
         </MenuItem>
         <MenuItem
           onClick={() => {
@@ -1055,76 +895,53 @@ const Materiels: React.FC = () => {
           <ListItemIcon>
             <Edit fontSize="small" color="info" />
           </ListItemIcon>
-          <ListItemText primaryTypographyProps={{ fontWeight: 500 }}>
-            Modifier
-          </ListItemText>
+          <ListItemText>Modifier</ListItemText>
         </MenuItem>
         <MenuItem
           onClick={() => {
             setDeleteTarget(menuAnchor?.materiel || null);
             handleMenuClose();
           }}
-          sx={{
-            color: "error.main",
-            "&:hover": {
-              bgcolor: alpha(theme.palette.error.main, 0.1),
-            },
-          }}
+          sx={{ color: "error.main" }}
         >
           <ListItemIcon>
-            <Delete fontSize="small" sx={{ color: "error.main" }} />
+            <Delete fontSize="small" color="error" />
           </ListItemIcon>
-          <ListItemText primaryTypographyProps={{ fontWeight: 500 }}>
-            Supprimer
-          </ListItemText>
+          <ListItemText>Supprimer</ListItemText>
         </MenuItem>
       </Menu>
 
-      {/* Modals */}
-      <MaterielFormModal
-        open={showForm || Boolean(editMateriel)}
-        materiel={editMateriel}
-        onClose={() => {
-          setShowForm(false);
-          setEditMateriel(null);
-        }}
-      />
+      {/* ============ MODALS ============ */}
+      {(showForm || editMateriel) && (
+        <MaterielFormModal
+          open={showForm || Boolean(editMateriel)}
+          materiel={editMateriel}
+          onClose={() => {
+            setShowForm(false);
+            setEditMateriel(null);
+          }}
+        />
+      )}
 
-      <MaterielViewModal
-        open={Boolean(viewMateriel)}
-        materiel={viewMateriel}
-        onClose={() => setViewMateriel(null)}
-        setEdit={() => {
-          if (!viewMateriel) return;
-          setViewMateriel(null);
-          setEditMateriel(viewMateriel);
-        }}
-      />
+      {viewMateriel && (
+        <MaterielViewModal
+          open={Boolean(viewMateriel)}
+          materiel={viewMateriel}
+          onClose={() => setViewMateriel(null)}
+          setEdit={() => {
+            setViewMateriel(null);
+            setEditMateriel(viewMateriel);
+          }}
+        />
+      )}
 
-      {/* ✅ CONFIRM DIALOG CORRIGÉ */}
       <ConfirmDialog
         open={Boolean(deleteTarget)}
-        isLoading={isLoading}
         title="Supprimer le matériel"
-        message={`Êtes-vous sûr de vouloir supprimer "${deleteTarget?.nom}" ?${
-          deleteTarget?.imagePublicId 
-            ? "\n\n⚠️ L'image associée sera également supprimée de Cloudinary." 
-            : ""
-        }`}
-        onConfirm={async () => {
-          if (!deleteTarget) return;
-          
-          setIsLoading(true);
-          try {
-            await confirmDelete(deleteTarget);
-          } catch (error) {
-            console.error("Erreur suppression:", error);
-          } finally {
-            setIsLoading(false);
-            setDeleteTarget(null);
-          }
-        }}
+        message={`Supprimer "${deleteTarget?.nom}" ?`}
+        onConfirm={handleConfirmDelete}
         onCancel={() => setDeleteTarget(null)}
+        isLoading={isLoading}
       />
     </Box>
   );

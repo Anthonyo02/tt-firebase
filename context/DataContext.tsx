@@ -508,35 +508,31 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  const deleteMateriel = async (id: string) => {
+const deleteMateriel = async (
+  id: string,
+  imagePublicId?: string
+) => {
+  // ✅ 1. Optimistic UI IMMEDIATE
+  setMateriels(prev => prev.filter(m => m.id !== id));
+
   try {
-    const ref = doc(db, "materiels", id);
-    const snap = await getDoc(ref);
+    // ✅ 2. Supprimer Firestore (rapide)
+    await deleteDoc(doc(db, "materiels", id));
 
-    if (!snap.exists()) return;
-
-    const data = snap.data();
-
-    // 🔥 1️⃣ Supprimer l'image Cloudinary
-    if (data.imagePublicId) {
-      await fetch("/api/cloudinary/delete", {
+    // ✅ 3. Supprimer Cloudinary EN BACKGROUND
+    if (imagePublicId) {
+      fetch("/api/cloudinary/delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          public_id: data.imagePublicId,
-        }),
-      });
+        body: JSON.stringify({ public_id: imagePublicId }),
+      }).catch(console.error);
     }
 
-    // 🗑️ 2️⃣ Supprimer le document Firebase
-    await deleteDoc(ref);
-
-    // 🔄 3️⃣ Mettre à jour le state
-    setMateriels((prev) => prev.filter((m) => m.id !== id));
   } catch (error) {
-    console.error("❌ Erreur deleteMateriel:", error);
+    console.error("❌ deleteMateriel error:", error);
   }
 };
+
 
 
   // =======================
