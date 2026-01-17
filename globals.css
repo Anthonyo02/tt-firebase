@@ -1,0 +1,162 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@import "leaflet/dist/leaflet.css";
+/* Inventory Management System - Design System */
+/* Palette: Olive/Sage Natural Professional */
+
+@layer base {
+  :root {
+    /* Primary - Olive Green */
+    --primary: 68 22% 45%;
+    --primary-foreground: 0 0% 100%;
+    
+    /* Secondary - Light Sage */
+    --secondary: 72 14% 76%;
+    --secondary-foreground: 68 22% 25%;
+    
+    /* Accents */
+    --accent-brown: 15 25% 38%;
+    --accent-beige: 20 24% 81%;
+    --accent-gold: 33 47% 69%;
+    
+    /* Background & Foreground */
+    --background: 0 0% 98%;
+    --foreground: 0 0% 10%;
+    
+    /* Cards & Surfaces */
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 10%;
+    
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 10%;
+    
+    /* Muted */
+    --muted: 72 14% 92%;
+    --muted-foreground: 0 0% 45%;
+    
+    /* Accent */
+    --accent: 72 14% 90%;
+    --accent-foreground: 68 22% 25%;
+    
+    /* Destructive */
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    
+    /* Success */
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    
+    /* Warning */
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 10%;
+    
+    /* Borders & Inputs */
+    --border: 72 14% 85%;
+    --input: 72 14% 85%;
+    --ring: 68 22% 45%;
+    
+    --radius: 0.75rem;
+    
+    /* Sidebar */
+    --sidebar-background: 68 22% 20%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 72 14% 76%;
+    --sidebar-primary-foreground: 68 22% 20%;
+    --sidebar-accent: 68 22% 28%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 68 22% 30%;
+    --sidebar-ring: 72 14% 76%;
+  }
+
+  .dark {
+    /* Background & Foreground - Dark Mode */
+    --background: 0 0% 8%;
+    --foreground: 0 0% 95%;
+    
+    /* Cards & Surfaces */
+    --card: 0 0% 12%;
+    --card-foreground: 0 0% 95%;
+    
+    --popover: 0 0% 12%;
+    --popover-foreground: 0 0% 95%;
+    
+    /* Primary stays the same for brand consistency */
+    --primary: 68 22% 50%;
+    --primary-foreground: 0 0% 100%;
+    
+    /* Secondary */
+    --secondary: 68 22% 25%;
+    --secondary-foreground: 72 14% 85%;
+    
+    /* Muted */
+    --muted: 0 0% 18%;
+    --muted-foreground: 0 0% 65%;
+    
+    /* Accent */
+    --accent: 68 22% 20%;
+    --accent-foreground: 72 14% 85%;
+    
+    /* Borders & Inputs */
+    --border: 0 0% 22%;
+    --input: 0 0% 22%;
+    --ring: 68 22% 50%;
+    
+    /* Sidebar */
+    --sidebar-background: 0 0% 6%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-accent: 0 0% 15%;
+    --sidebar-border: 0 0% 18%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Smooth transitions */
+.transition-smooth {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Card shadows */
+.card-shadow {
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+}
+
+.card-shadow-hover {
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+}
+
+/* Glass effect */
+.glass {
+  background: hsl(var(--card) / 0.8);
+  backdrop-filter: blur(8px);
+}
