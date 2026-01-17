@@ -60,7 +60,7 @@ import { TransitionProps } from "@mui/material/transitions";
 import { useData, Materiel as MaterielType } from "@/context/DataContext";
 
 // ============================================
-// CONSTANTES & UTILITAIRES
+// CONSTANTES & UTILITAIRES (EN DEHORS DU COMPOSANT)
 // ============================================
 
 // Transition pour le Dialog
@@ -71,10 +71,13 @@ const Transition = forwardRef(function Transition(
   return <Slide direction="up" ref={ref} {...props} />;
 });
 
-const base64ToFile = async (base64: string, filename: string) => {
-  const res = await fetch(base64);
-  const blob = await res.blob();
-  return new File([blob], filename, { type: blob.type });
+// ✅ Options de compression OPTIMISÉES (en dehors du composant)
+const COMPRESSION_OPTIONS = {
+  maxSizeMB: 0.2,
+  maxWidthOrHeight: 1200,
+  useWebWorker: true,
+  fileType: "image/webp" as const,
+  initialQuality: 0.7,
 };
 
 // Options de format pour le recadrage
@@ -106,11 +109,13 @@ const rotateSize = (width: number, height: number, rotation: number) => {
   };
 };
 
+// ✅ Retourne un Blob directement (plus rapide que base64)
 async function getCroppedImg(
   imageSrc: string,
   pixelCrop: Area,
-  rotation = 0
-): Promise<string> {
+  rotation = 0,
+  quality = 0.7
+): Promise<Blob> {
   const image = await createImage(imageSrc);
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
@@ -150,11 +155,20 @@ async function getCroppedImg(
     pixelCrop.height
   );
 
-  return croppedCanvas.toDataURL("image/jpeg", 0.9);
+  return new Promise((resolve, reject) => {
+    croppedCanvas.toBlob(
+      (blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error("Erreur création blob"));
+      },
+      "image/webp",
+      quality
+    );
+  });
 }
 
 // ============================================
-// CLOUDINARY UPLOAD - VIA API ROUTE (SIGNED)
+// CLOUDINARY UPLOAD - OPTIMISÉ
 // ============================================
 type CloudinaryUploadResult = {
   imageUrl: string;
@@ -162,20 +176,21 @@ type CloudinaryUploadResult = {
 };
 
 const uploadToCloudinary = async (
-  file: File,
+  file: File | Blob,
   existingPublicId?: string
 ): Promise<CloudinaryUploadResult> => {
   const formData = new FormData();
-  formData.append("file", file);
+
+  // ✅ Gestion Blob vs File
+  if (file instanceof Blob && !(file instanceof File)) {
+    formData.append("file", file, "image.webp");
+  } else {
+    formData.append("file", file);
+  }
 
   if (existingPublicId) {
     formData.append("publicId", existingPublicId);
   }
-
-  console.log("📤 Uploading to Cloudinary...", {
-    hasExistingId: !!existingPublicId,
-    existingPublicId,
-  });
 
   const res = await fetch("/api/cloudinary/upload", {
     method: "POST",
@@ -184,27 +199,19 @@ const uploadToCloudinary = async (
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
-    console.error("❌ Upload failed:", errorData);
     throw new Error(errorData.error || "Upload failed");
   }
 
   const data = await res.json();
 
-  console.log("✅ Upload response:", data);
-
   return {
-    imageUrl: data.url || "",
-    imagePublicId: data.publicId || "",
+    imageUrl: data.url || data.imageUrl || "",
+    imagePublicId: data.publicId || data.imagePublicId || "",
   };
 };
 
 const deleteFromCloudinary = async (publicId: string): Promise<boolean> => {
-  if (!publicId) {
-    console.warn("⚠️ No publicId to delete");
-    return false;
-  }
-
-  console.log("🗑️ Deleting from Cloudinary:", publicId);
+  if (!publicId) return false;
 
   try {
     const res = await fetch("/api/cloudinary/delete", {
@@ -212,17 +219,12 @@ const deleteFromCloudinary = async (publicId: string): Promise<boolean> => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ publicId }),
     });
-
-    const data = await res.json();
-    console.log("🗑️ Delete response:", data);
-
     return res.ok;
   } catch (error) {
-    console.error("❌ Delete error:", error);
+    console.error("Delete error:", error);
     return false;
   }
 };
-
 
 // ============================================
 // COMPONENT
@@ -264,12 +266,11 @@ const MaterielFormModal: React.FC<Props> = ({
 
   // Validation States
   const [referenceError, setReferenceError] = useState<string | null>(null);
-  const [referenceNumError, setReferenceNumError] = useState<string | null>(
-    null
-  );
+  const [referenceNumError, setReferenceNumError] = useState<string | null>(null);
 
   // IMAGE STATE
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageBlob, setImageBlob] = useState<Blob | null>(null); // ✅ Nouveau state pour Blob
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageRemoved, setImageRemoved] = useState(false);
   const [isCompressing, setIsCompressing] = useState(false);
@@ -286,8 +287,8 @@ const MaterielFormModal: React.FC<Props> = ({
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
   const [aspectRatio, setAspectRatio] = useState<number | undefined>(1);
 
-  // Pour garder une référence de l'image originale (avant modification)
-  const [originalImagePublicId, setOriginalImagePublicId] = useState<string | null>(null);
+  // Reference count
+  const [existingCount, setExistingCount] = useState<number>(0);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -295,14 +296,23 @@ const MaterielFormModal: React.FC<Props> = ({
   // Vérifie si l'image vient de Google Drive
   const isGoogleDriveImage = imagePreview?.includes("drive.google.com");
 
-  // EFFECTS
+  // ✅ Cleanup des blob URLs
+  useEffect(() => {
+    return () => {
+      if (imagePreview?.startsWith("blob:")) {
+        URL.revokeObjectURL(imagePreview);
+      }
+    };
+  }, [imagePreview]);
+
+  // EFFECTS - Init form
   useEffect(() => {
     if (open) {
       if (materiel) {
         setForm(materiel);
         setImagePreview(materiel.imageUrl || null);
-        setOriginalImagePublicId(materiel.imagePublicId || null);
         setImageFile(null);
+        setImageBlob(null);
         setImageRemoved(false);
       } else {
         resetForm();
@@ -325,13 +335,14 @@ const MaterielFormModal: React.FC<Props> = ({
     });
     setImagePreview(null);
     setImageFile(null);
+    setImageBlob(null);
     setImageRemoved(false);
-    setOriginalImagePublicId(null);
     setShowNewCat(false);
     setShowNewRef(false);
     setReferenceError(null);
     setReferenceNumError(null);
     setImageError(null);
+    setExistingCount(0);
     resetCropper();
   };
 
@@ -355,9 +366,7 @@ const MaterielFormModal: React.FC<Props> = ({
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  /**
-   * Calcule le prochain suffixe disponible pour une référence donnée
-   */
+  // Calcule le prochain suffixe disponible
   const getNextSuffixForReference = useCallback(
     (reference: string): string => {
       if (!reference || !materiels || materiels.length === 0) return "1";
@@ -371,24 +380,17 @@ const MaterielFormModal: React.FC<Props> = ({
       const numbers = relatedMateriels
         .map((m) => {
           const match = m.referenceNum?.match(/\d+/);
-          if (match) {
-            return parseInt(match[0], 10);
-          }
-          return 0;
+          return match ? parseInt(match[0], 10) : 0;
         })
         .filter((n) => !isNaN(n) && n > 0);
 
       if (numbers.length === 0) return "1";
-
-      const maxNum = Math.max(...numbers);
-      return String(maxNum + 1);
+      return String(Math.max(...numbers) + 1);
     },
     [materiels, materiel?.id]
   );
 
   // --- LOGIQUE REFERENCE ---
-  const [existingCount, setExistingCount] = useState<number>(0);
-
   const handleReferenceSelectChange = (value: string) => {
     setForm((prev) => ({ ...prev, reference: value }));
 
@@ -397,7 +399,6 @@ const MaterielFormModal: React.FC<Props> = ({
         (m) => m.reference === value && m.id !== materiel?.id
       ).length;
       setExistingCount(count);
-
       const nextSuffix = getNextSuffixForReference(value);
       setForm((prev) => ({ ...prev, referenceNum: nextSuffix }));
     } else {
@@ -410,7 +411,6 @@ const MaterielFormModal: React.FC<Props> = ({
     const formatted = value.startsWith("T-T") ? value : `T-T${value}`;
     setForm((prev) => ({ ...prev, reference: formatted }));
     setReferenceError(null);
-
     const nextSuffix = getNextSuffixForReference(formatted);
     setForm((prev) => ({ ...prev, referenceNum: nextSuffix }));
   };
@@ -449,6 +449,7 @@ const MaterielFormModal: React.FC<Props> = ({
     if (file) handleImageFile(file);
   };
 
+  // ✅ Compression optimisée
   const handleImageFile = async (file: File) => {
     setImageError(null);
 
@@ -459,11 +460,7 @@ const MaterielFormModal: React.FC<Props> = ({
 
     setIsCompressing(true);
     try {
-      const compressedFile = await imageCompression(file, {
-        maxSizeMB: 0.5,
-        maxWidthOrHeight: 1920,
-        useWebWorker: true,
-      });
+      const compressedFile = await imageCompression(file, COMPRESSION_OPTIONS);
 
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -496,27 +493,34 @@ const MaterielFormModal: React.FC<Props> = ({
   };
 
   const onCropComplete = useCallback(
-    (croppedArea: Area, croppedPixels: Area) => {
+    (_croppedArea: Area, croppedPixels: Area) => {
       setCroppedAreaPixels(croppedPixels);
     },
     []
   );
 
+  // ✅ Applique le crop et stocke un Blob (pas de base64)
   const handleApplyCrop = async () => {
     if (!tempImage || !croppedAreaPixels) return;
 
     setIsCompressing(true);
     try {
-      const croppedBase64 = await getCroppedImg(
+      const croppedBlob = await getCroppedImg(
         tempImage,
         croppedAreaPixels,
         rotation
       );
 
-      const file = await base64ToFile(croppedBase64, "materiel.jpg");
+      // Cleanup de l'ancienne URL blob si elle existe
+      if (imagePreview?.startsWith("blob:")) {
+        URL.revokeObjectURL(imagePreview);
+      }
 
-      setImageFile(file);
-      setImagePreview(croppedBase64);
+      const previewUrl = URL.createObjectURL(croppedBlob);
+
+      setImageBlob(croppedBlob);
+      setImageFile(null);
+      setImagePreview(previewUrl);
       setImageRemoved(false);
       resetCropper();
     } catch (err) {
@@ -532,124 +536,80 @@ const MaterielFormModal: React.FC<Props> = ({
   };
 
   const handleRemoveImage = () => {
+    if (imagePreview?.startsWith("blob:")) {
+      URL.revokeObjectURL(imagePreview);
+    }
     setImagePreview(null);
     setImageFile(null);
+    setImageBlob(null);
     setImageRemoved(true);
   };
 
   const handleClickUpload = () => fileInputRef.current?.click();
   const handleClickCamera = () => cameraInputRef.current?.click();
 
-  // --- SAUVEGARDE ---
+  // ✅ SAUVEGARDE OPTIMISÉE
   const handleSave = async () => {
-  if (!form.nom) return;
-  setIsLoading(true);
-  setImageError(null);
+    if (!form.nom) return;
+    setIsLoading(true);
+    setImageError(null);
 
-  try {
-    let finalImageUrl = form.imageUrl || "";
-    let finalImagePublicId = form.imagePublicId || "";
+    try {
+      const originalPublicId = materiel?.imagePublicId || null;
+      const hasNewImage = !!(imageFile || imageBlob);
 
-    // Récupérer le publicId original (celui en BDD)
-    const originalPublicId = materiel?.imagePublicId || null;
+      let payload: MaterielType = { ...form };
 
-    console.log("💾 Saving materiel...", {
-      hasNewImage: !!imageFile,
-      imageRemoved,
-      originalPublicId,
-      currentFormPublicId: form.imagePublicId,
-    });
+      // ============================================
+      // GESTION DES IMAGES
+      // ============================================
 
-    // ============================================
-    // 📌 CAS 1: Nouvelle image uploadée
-    // ============================================
-    if (imageFile) {
-      // Si on a un publicId existant → OVERWRITE (même URL, pas d'orphelin)
-      if (originalPublicId) {
-        console.log("🔄 Overwriting existing image:", originalPublicId);
-        
-        const upload = await uploadToCloudinary(imageFile, originalPublicId);
-        
-        finalImageUrl = upload.imageUrl;
-        finalImagePublicId = upload.imagePublicId;
+      if (hasNewImage) {
+        // ✅ Upload avec le blob directement (plus rapide)
+        const fileToUpload = imageBlob || imageFile!;
+
+        const upload = await uploadToCloudinary(
+          fileToUpload,
+          originalPublicId || undefined
+        );
+
+        payload.imageUrl = upload.imageUrl;
+        payload.imagePublicId = upload.imagePublicId;
+      } else if (imageRemoved && originalPublicId) {
+        // ✅ Suppression asynchrone (ne bloque pas l'UI)
+        deleteFromCloudinary(originalPublicId).catch(console.error);
+
+        payload.imageUrl = "";
+        payload.imagePublicId = "";
+      } else if (materiel) {
+        // Pas de changement
+        payload.imageUrl = materiel.imageUrl || "";
+        payload.imagePublicId = materiel.imagePublicId || "";
+      }
+
+      // Sauvegarder dans la base de données
+      if (materiel?.id) {
+        await updateMateriel(materiel.id, payload);
       } else {
-        // Pas d'image existante → Upload normal
-        console.log("🆕 Uploading new image");
-        
-        const upload = await uploadToCloudinary(imageFile);
-        
-        finalImageUrl = upload.imageUrl;
-        finalImagePublicId = upload.imagePublicId;
+        await addMateriel(payload);
       }
 
-      if (!finalImageUrl) {
-        throw new Error("URL de l'image manquante après upload");
-      }
+      // Reset
+      setImageFile(null);
+      setImageBlob(null);
+      setImageRemoved(false);
+
+      onSaved?.();
+      onClose();
+    } catch (err) {
+      console.error("Erreur sauvegarde:", err);
+      setImageError(
+        err instanceof Error ? err.message : "Erreur lors de l'enregistrement."
+      );
+    } finally {
+      setIsLoading(false);
     }
-    // ============================================
-    // 📌 CAS 2: Image supprimée (sans nouvelle image)
-    // ============================================
-    else if (imageRemoved && originalPublicId) {
-      console.log("🗑️ Deleting image:", originalPublicId);
-      
-      const deleted = await deleteFromCloudinary(originalPublicId);
-      
-      if (deleted) {
-        console.log("✅ Image deleted successfully");
-      } else {
-        console.warn("⚠️ Image deletion may have failed");
-      }
-
-      finalImageUrl = "";
-      finalImagePublicId = "";
-    }
-    // ============================================
-    // 📌 CAS 3: Pas de changement d'image
-    // ============================================
-    else {
-      console.log("📷 No image change");
-      // Garder les valeurs existantes du matériel original
-      if (materiel) {
-        finalImageUrl = materiel.imageUrl || "";
-        finalImagePublicId = materiel.imagePublicId || "";
-      }
-    }
-
-    // Construire le payload final
-    const payload: MaterielType = {
-      ...form,
-      imageUrl: finalImageUrl,
-      imagePublicId: finalImagePublicId,
-    };
-
-    console.log("💾 Final payload:", {
-      nom: payload.nom,
-      imageUrl: payload.imageUrl ? "✅ " + payload.imageUrl.substring(0, 50) + "..." : "❌ Vide",
-      imagePublicId: payload.imagePublicId || "❌ Vide",
-    });
-
-    // Sauvegarder dans la base de données
-    if (materiel?.id) {
-      await updateMateriel(materiel.id, payload);
-    } else {
-      await addMateriel(payload);
-    }
-
-    // Reset des états après succès
-    setImageFile(null);
-    setImageRemoved(false);
-
-    onSaved?.();
-    onClose();
-  } catch (err) {
-    console.error("❌ Erreur sauvegarde:", err);
-    setImageError(
-      err instanceof Error ? err.message : "Erreur lors de l'enregistrement."
-    );
-  } finally {
-    setIsLoading(false);
-  }
-};
+  };
 
   const isFormValid = () => !!form.nom && !isCompressing && !isLoading;
 
@@ -977,10 +937,7 @@ const MaterielFormModal: React.FC<Props> = ({
                   SelectProps={{
                     MenuProps: {
                       PaperProps: {
-                        style: {
-                          maxHeight: "150px",
-                          overflowY: "auto",
-                        },
+                        style: { maxHeight: "150px", overflowY: "auto" },
                       },
                     },
                   }}
@@ -1047,10 +1004,7 @@ const MaterielFormModal: React.FC<Props> = ({
                   SelectProps={{
                     MenuProps: {
                       PaperProps: {
-                        style: {
-                          maxHeight: "150px",
-                          overflowY: "auto",
-                        },
+                        style: { maxHeight: "150px", overflowY: "auto" },
                       },
                     },
                   }}
@@ -1103,10 +1057,7 @@ const MaterielFormModal: React.FC<Props> = ({
                   onChange={(e) => handleChange("statut", e.target.value)}
                   MenuProps={{
                     PaperProps: {
-                      style: {
-                        maxHeight: "150px",
-                        overflowY: "auto",
-                      },
+                      style: { maxHeight: "150px", overflowY: "auto" },
                     },
                   }}
                 >
