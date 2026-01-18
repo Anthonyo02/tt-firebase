@@ -46,6 +46,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { collection, deleteDoc, doc, onSnapshot } from "firebase/firestore";
 import { db } from "../lib/firebase";
 
+// ✅ Import LocalForage
+import storage from "../lib/localforage";
+
 const STORAGE_KEY = "projets";
 
 /* =====================================================
@@ -99,14 +102,6 @@ const formatDate = (dateStr?: string) => {
   });
 };
 
-const safeJsonParse = <T,>(v: string, fallback: T): T => {
-  try {
-    return JSON.parse(v);
-  } catch {
-    return fallback;
-  }
-};
-
 const normalizeProjet = (raw: any): Projet => ({
   id: String(raw.id ?? ""),
   titre: String(raw.titre ?? ""),
@@ -122,22 +117,15 @@ const normalizeProjet = (raw: any): Projet => ({
   commentaire: String(raw.commentaire ?? ""),
 });
 
-const readFromStorage = (): Projet[] => {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return [];
-  const parsed = safeJsonParse<any[]>(raw, []);
-  return parsed.map(normalizeProjet);
-};
-
 /* =====================================================
    COMPONENT
 ===================================================== */
 const Projets: React.FC = () => {
   const { isAdmin } = useAuth();
   const router = useRouter();
-const searchParams = useSearchParams();
+  const searchParams = useSearchParams();
 
-const statusFilter = searchParams.get("status") || "tous";
+  const statusFilter = searchParams.get("status") || "tous";
 
   const [projets, setProjets] = useState<Projet[]>([]);
   const [search, setSearch] = useState("");
@@ -152,27 +140,41 @@ const statusFilter = searchParams.get("status") || "tous";
     projet: Projet;
   } | null>(null);
 
-
-  const refresh = useCallback(() => {
-    setProjets(readFromStorage());
+  // ✅ Chargement initial depuis LocalForage (Asynchrone)
+  useEffect(() => {
+    const loadFromStorage = async () => {
+      try {
+        const storedProjets = await storage.getItem<Projet[]>(STORAGE_KEY);
+        if (storedProjets && Array.isArray(storedProjets)) {
+          setProjets(storedProjets.map(normalizeProjet));
+        }
+      } catch (error) {
+        console.error("Erreur chargement localForage projets:", error);
+      }
+    };
+    loadFromStorage();
   }, []);
 
   /* =====================================================
      🔥 FIRESTORE REALTIME SYNC
   ===================================================== */
   useEffect(() => {
-    refresh();
-
     const unsub = onSnapshot(collection(db, "projets"), (snap) => {
       const data: Projet[] = snap.docs.map((d) =>
         normalizeProjet({ id: d.id, ...d.data() })
       );
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      
+      // Mise à jour du state
       setProjets(data);
+      
+      // ✅ Sauvegarde dans LocalForage
+      storage.setItem(STORAGE_KEY, data).catch(err => 
+        console.error("Erreur sauvegarde localForage:", err)
+      );
     });
 
     return () => unsub();
-  }, [refresh]);
+  }, []);
 
   /* =====================================================
      FILTERS
@@ -208,26 +210,36 @@ const statusFilter = searchParams.get("status") || "tous";
   const handleDelete = async () => {
     if (!deleteProjet) return;
     setIsLoading(true);
+
+    // Optimistic UI update (Optionnel mais recommandé)
+    const newProjets = projets.filter(p => p.id !== deleteProjet.id);
+    setProjets(newProjets);
+    storage.setItem(STORAGE_KEY, newProjets);
+
     try {
       await deleteDoc(doc(db, "projets", deleteProjet.id));
       setDeleteProjet(null);
       setMenuAnchor(null);
+    } catch (error) {
+      console.error("Erreur suppression:", error);
+      // Rollback si erreur (recharger depuis localForage ou Firestore se fera automatiquement)
     } finally {
       setIsLoading(false);
     }
   };
-  
-const handleStatusChange = (st: string) => {
-  const params = new URLSearchParams(searchParams.toString());
 
-  if (st === "tous") {
-    params.delete("status");
-  } else {
-    params.set("status", st);
-  }
+  const handleStatusChange = (st: string) => {
+    const params = new URLSearchParams(searchParams.toString());
 
-  router.replace(`?${params.toString()}`); // remplace l'URL sans recharger
-};
+    if (st === "tous") {
+      params.delete("status");
+    } else {
+      params.set("status", st);
+    }
+
+    router.replace(`?${params.toString()}`); // remplace l'URL sans recharger
+  };
+
   /* =====================================================
      UI
   ===================================================== */

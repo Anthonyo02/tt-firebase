@@ -1,7 +1,7 @@
+"use client";
 import React, { useState, useEffect } from "react";
 import {
   Dialog,
-  DialogTitle,
   DialogContent,
   List,
   ListItem,
@@ -22,14 +22,12 @@ import {
   Badge,
   Paper,
   InputBase,
-  CircularProgress,
 } from "@mui/material";
 import {
   Edit,
   Delete,
   People,
   Close,
-  Add,
   Search,
   PersonAdd,
   AdminPanelSettings,
@@ -42,17 +40,22 @@ import ConfirmDialog from "./ConfirmDialog";
 import { db } from "../../lib/firebase";
 import {
   collection,
-  getDocs,
   deleteDoc,
   doc,
   onSnapshot,
+  query,
+  orderBy,
 } from "firebase/firestore";
+
+// ✅ Import LocalForage
+import storage from "@/lib/localforage";
 
 interface User {
   id: string;
   nom: string;
   email: string;
   role: string;
+  createdAt?: number; // ✅ Ajout du timestamp de création
 }
 
 interface UsersListModalProps {
@@ -63,15 +66,12 @@ interface UsersListModalProps {
   setReload: () => void;
 }
 
-// ❌ Plus besoin de STORAGE_KEY — on utilise Firestore maintenant
-// const STORAGE_KEY = "users";
+const STORAGE_KEY = "users";
 
 const UsersListModal: React.FC<UsersListModalProps> = ({
   open,
   onClose,
   openCreate,
-  reload,
-  setReload,
 }) => {
   const [localUsers, setLocalUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
@@ -107,10 +107,41 @@ const UsersListModal: React.FC<UsersListModalProps> = ({
       .slice(0, 2);
   };
 
+  // ✅ Fonction pour trier les utilisateurs (plus récent en premier)
+  const sortUsersByDate = (users: User[]): User[] => {
+    return [...users].sort((a, b) => {
+      const dateA = a.createdAt || 0;
+      const dateB = b.createdAt || 0;
+      return dateB - dateA; // Ordre décroissant (plus récent en premier)
+    });
+  };
+
   /* =========================
-     🔥 FIREBASE : Load users from Firestore
+     🔥 Initial Load from LocalForage
   ========================== */
   useEffect(() => {
+    const loadFromStorage = async () => {
+      try {
+        const storedUsers = await storage.getItem<User[]>(STORAGE_KEY);
+        if (storedUsers) {
+          const sorted = sortUsersByDate(storedUsers);
+          setLocalUsers(sorted);
+          setFilteredUsers(sorted);
+        }
+      } catch (err) {
+        console.error("Erreur chargement localForage users:", err);
+      }
+    };
+    loadFromStorage();
+  }, []);
+
+  /* =========================
+     🔥 FIREBASE : Sync Users & Update LocalForage
+  ========================== */
+  useEffect(() => {
+    // ✅ Option 1: Utiliser orderBy si vous avez un index Firestore
+    // const q = query(collection(db, "users"), orderBy("createdAt", "desc"));
+    
     const unsubscribe = onSnapshot(
       collection(db, "users"),
       (snapshot) => {
@@ -118,14 +149,22 @@ const UsersListModal: React.FC<UsersListModalProps> = ({
         snapshot.forEach((doc) => {
           const data = doc.data();
           users.push({
-            id: doc.id, // ⚠️ utilise doc.id si tu ne stockes pas "id" dans le doc
+            id: doc.id,
             nom: data.nom || "",
             email: data.email || "",
             role: data.role || "employer",
+            createdAt: data.createdAt || 0, // ✅ Récupérer le timestamp
           });
         });
-        setLocalUsers(users);
-        setFilteredUsers(users);
+        
+        // ✅ Trier les utilisateurs par date de création (plus récent en premier)
+        const sortedUsers = sortUsersByDate(users);
+        
+        setLocalUsers(sortedUsers);
+        setFilteredUsers(sortedUsers);
+
+        // ✅ Sauvegarde dans LocalForage
+        storage.setItem(STORAGE_KEY, sortedUsers).catch(console.error);
       },
       (err) => {
         console.error("Erreur Firestore:", err);
@@ -133,9 +172,8 @@ const UsersListModal: React.FC<UsersListModalProps> = ({
       }
     );
 
-    // Nettoyage à la destruction du composant
     return () => unsubscribe();
-  }, []); // Pas besoin de dépendre de `reload` — Firestore écoute en temps réel
+  }, []);
 
   /* =========================
      Search filter
@@ -149,43 +187,26 @@ const UsersListModal: React.FC<UsersListModalProps> = ({
           user.nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
           user.email.toLowerCase().includes(searchQuery.toLowerCase())
       );
+      // ✅ Garder le tri même après filtrage
       setFilteredUsers(filtered);
     }
   }, [searchQuery, localUsers]);
 
   /* =========================
-     🔥 FIREBASE : Delete user
-  ========================== */
-   /* =========================
-     🔥 FIREBASE : Delete user + Update LocalStorage
+     🔥 FIREBASE : Delete user + Update LocalForage
   ========================== */
   const handleDelete = async () => {
     setIsLoading(true);
     if (!deleteUser) return;
-    
+
     try {
-      // 1. Supprime le doc dans Firestore
-      await deleteDoc(doc(db, "users", deleteUser.id)); 
+      await deleteDoc(doc(db, "users", deleteUser.id));
 
-      // =========================================================
-      // MISE A JOUR LOCAL STORAGE (UNIQUEMENT SI DELETE REUSSI)
-      // =========================================================
-      
-      const storedUsers = localStorage.getItem("users");
-      if (storedUsers) {
-        const usersList = JSON.parse(storedUsers);
-        
-        // On filtre pour garder tous les utilisateurs SAUF celui qu'on vient de supprimer
-        const updatedList = usersList.filter((u: any) => u.id !== deleteUser.id);
-        
-        localStorage.setItem("users", JSON.stringify(updatedList));
-      }
-
-      // =========================================================
+      const currentUsers = await storage.getItem<User[]>(STORAGE_KEY) || [];
+      const updatedList = currentUsers.filter((u) => u.id !== deleteUser.id);
+      await storage.setItem(STORAGE_KEY, updatedList);
 
       setDeleteUser(null);
-      // Note : pas besoin de setLocalUsers ici car onSnapshot le fera automatiquement pour l'UI
-      
     } catch (err) {
       console.error(err);
       setError("Erreur lors de la suppression");
@@ -193,6 +214,7 @@ const UsersListModal: React.FC<UsersListModalProps> = ({
       setIsLoading(false);
     }
   };
+
   // Stats
   const adminCount = localUsers.filter((u) => u.role === "admin").length;
   const employeeCount = localUsers.filter((u) => u.role !== "admin").length;
@@ -222,7 +244,7 @@ const UsersListModal: React.FC<UsersListModalProps> = ({
             overflow: "hidden",
             color: "white",
             p: 2,
-            height:250
+            height: 250,
           }}
         >
           <Box
@@ -372,7 +394,8 @@ const UsersListModal: React.FC<UsersListModalProps> = ({
             </Box>
           ) : (
             <List sx={{ p: 2 }}>
-              {[...filteredUsers].reverse().map((user, index) => (
+              {/* ✅ SUPPRIMÉ: .reverse() car déjà trié par sortUsersByDate */}
+              {filteredUsers.map((user, index) => (
                 <Fade in key={user.id} timeout={300 + index * 100}>
                   <Paper
                     elevation={2}
@@ -532,15 +555,13 @@ const UsersListModal: React.FC<UsersListModalProps> = ({
           user={editUser}
           onClose={() => setEditUser(null)}
           onSave={(updated) => {
-            // 🔥 Ici aussi, il faudra mettre à jour Firestore — mais c’est dans EditUserModal
-            // Tu devras adapter EditUserModal comme on a fait ici.
-            // Pour l’instant, on garde la logique locale, mais elle sera obsolète.
-            // Je te donnerai la version Firebase de EditUserModal après.
             const updatedUsers = localUsers.map((u) =>
               u.id === updated.id ? updated : u
             );
-            setLocalUsers(updatedUsers);
+            const sorted = sortUsersByDate(updatedUsers);
+            setLocalUsers(sorted);
             setEditUser(null);
+            storage.setItem(STORAGE_KEY, sorted);
           }}
         />
       )}

@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState } from "react";
 import {
   Dialog,
@@ -34,9 +36,8 @@ import {
 } from "@mui/icons-material";
 import { TransitionProps } from "@mui/material/transitions";
 
-// 🔥 Import Firebase
-import { db } from "../../lib/firebase";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+// 🔥 Import du Contexte
+import { useData } from "@/context/DataContext";
 
 /* =======================
    THEME (GLOBAL IDENTITY)
@@ -51,7 +52,7 @@ const PRIMARY_SOFT = "#f3f4ed";
 ======================= */
 const Transition = React.forwardRef(function Transition(
   props: TransitionProps & { children: React.ReactElement },
-  ref: React.Ref<unknown>
+  ref: React.Ref<unknown>,
 ) {
   return <Slide direction="up" ref={ref} {...props} />;
 });
@@ -67,6 +68,9 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({
   onClose,
   setReload,
 }) => {
+  // 🔥 Récupération des fonctions du contexte
+  const { addUser, fetchUsers } = useData();
+
   const [form, setForm] = useState({
     id: "",
     nom: "",
@@ -103,69 +107,58 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({
       setError("");
       setSuccess(false);
       setConfirmPassword("");
-      onClose();
     }
   };
 
-  // 🔥 Nouvelle logique Firestore
-const save = async () => {
-  if (!isFormValid) {
-    setError("Veuillez remplir correctement tous les champs");
-    return;
-  }
+  // 🔥 Logique mise à jour avec LocalForage via Context
+  const save = async () => {
+    if (!isFormValid) {
+      setError("Veuillez remplir correctement tous les champs");
+      return;
+    }
 
-  setIsLoading(true);
-  setError("");
-  setSuccess(false);
+    setIsLoading(true);
+    setError("");
+    setSuccess(false);
 
-  try {
-    // Ajoute le nouvel utilisateur dans Firestore
-    const docRef = await addDoc(collection(db, "users"), {
-      nom: form.nom,
-      email: form.email,
-      password: form.password,
-      role: form.role,
-      createdAt: serverTimestamp(),
-    });
+    try {
+      // 1. Sauvegarde dans Firestore via le Contexte
+      const newUserPayload = {
+        nom: form.nom,
+        email: form.email,
+        password: form.password,
+        role: form.role,
+        // createdAt est géré côté serveur ou dans addUser
+      };
 
-    // ✅ SUCCÈS - Mettre à jour le localStorage
-    const existingUsers = JSON.parse(localStorage.getItem("users") || "[]");
-    
-    const newUser = {
-      id: docRef.id, // L'ID généré par Firestore
-      nom: form.nom,
-      email: form.email,
-      password: form.password,
-      role: form.role,
-      createdAt: new Date().toISOString(),
-    };
-    
-    // Ajouter le nouvel utilisateur à la liste
-    existingUsers.push(newUser);
-    
-    // Sauvegarder dans localStorage
-    localStorage.setItem("users", JSON.stringify(existingUsers));
-    
-    console.log("✅ Utilisateur ajouté au localStorage:", newUser);
+      console.log("💾 Ajout de l'utilisateur...");
+      await addUser(newUserPayload);
+      onClose();
+      // 2. SYNCHRONISATION AVEC LOCALFORAGE
+      // On force le fetch pour récupérer les données serveur et mettre à jour le cache local
+      console.log("🔄 Synchronisation avec LocalForage...");
+      await fetchUsers();
 
-    setSuccess(true);
-    setReload();
+      // Succès
+      setSuccess(true);
+      if (setReload) setReload(); // Notifier le parent si nécessaire
 
-    setTimeout(() => {
-      setSuccess(false);
-      handleClose();
-    }, 1500);
-  } catch (err) {
-    console.error(err);
-    setError("Erreur lors de la création de l'utilisateur");
-  } finally {
-    setIsLoading(false);
-  }
-};
+      setTimeout(() => {
+        setSuccess(false);
+        handleClose();
+      }, 1500);
+    } catch (err: any) {
+      console.error("❌ Erreur création user:", err);
+      setError("Erreur lors de la création de l'utilisateur : " + err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <Dialog
       open={open}
-      onClose={handleClose}
+      onClose={!isLoading ? handleClose : undefined}
       maxWidth="sm"
       fullWidth
       TransitionComponent={Transition}
@@ -378,9 +371,7 @@ const save = async () => {
               endAdornment: (
                 <InputAdornment position="end">
                   <IconButton
-                    onClick={() =>
-                      setShowConfirmPassword(!showConfirmPassword)
-                    }
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                     edge="end"
                   >
                     {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
@@ -427,7 +418,9 @@ const save = async () => {
             "linear-gradient(135deg, #818660 0%, #d6d8c5ff 50%, #6b7052 100%)",
         }}
       >
-        <Button onClick={handleClose}>Annuler</Button>
+        <Button onClick={handleClose} disabled={isLoading}>
+          Annuler
+        </Button>
 
         <Button
           variant="contained"

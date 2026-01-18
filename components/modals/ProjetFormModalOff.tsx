@@ -86,7 +86,7 @@ interface FormState {
 // =======================
 // COMPOSANT PRINCIPAL
 // =======================
-const ProjetFormModal: React.FC<ProjetFormModalProps> = ({
+const ProjetFormModalOff: React.FC<ProjetFormModalProps> = ({
   open,
   projet,
   onClose,
@@ -502,7 +502,7 @@ const ProjetFormModal: React.FC<ProjetFormModalProps> = ({
   // =======================
   return (
     <>
-      <Dialog
+      {/* <Dialog
         open={open}
         onClose={!loading ? onClose : undefined}
         maxWidth="sm"
@@ -945,9 +945,10 @@ const ProjetFormModal: React.FC<ProjetFormModalProps> = ({
           setMapModalOpen(false);
         }}
         initialValue={form.lieu_link}
-      />
+      /> */}
+      <Typography variant="h1">projet offligne</Typography>
     </>
   );
 };
 
-export default ProjetFormModal;
+export default ProjetFormModalOff;

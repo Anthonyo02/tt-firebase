@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useEffect } from "react";
 import {
   Dialog,
@@ -21,9 +23,8 @@ import {
 import { Edit, Close } from "@mui/icons-material";
 import { TransitionProps } from "@mui/material/transitions";
 
-// 🔥 Firebase
-import { db } from "../../lib/firebase";
-import { doc, updateDoc } from "firebase/firestore";
+// 🔥 Import du Contexte
+import { useData } from "@/context/DataContext";
 
 interface User {
   id: string;
@@ -53,6 +54,9 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
   onClose,
   onSave,
 }) => {
+  // 🔥 Récupération des fonctions du contexte
+  const { updateUser, fetchUsers } = useData();
+
   const [form, setForm] = useState({
     id: user.id,
     nom: user.nom,
@@ -83,6 +87,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
     setError("");
   };
 
+  // 🔥 Logique mise à jour avec LocalForage via Context
   const save = async () => {
     if (!form.id || !form.nom || !form.email || !form.role) {
       setError("Veuillez remplir tous les champs obligatoires.");
@@ -93,8 +98,6 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
     setError("");
 
     try {
-      const userRef = doc(db, "users", form.id);
-
       const payload: any = {
         nom: form.nom,
         email: form.email,
@@ -103,10 +106,18 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
 
       // Ne mettre à jour le mot de passe que s'il a été saisi
       if (form.password) {
-        payload.password = form.password; // ⚠️ à hasher côté back si prod
+        payload.password = form.password; 
       }
 
-      await updateDoc(userRef, payload);
+      console.log("💾 Mise à jour de l'utilisateur...");
+      
+      // 1. Mise à jour dans Firestore via le Contexte
+      await updateUser(form.id, payload);
+
+      // 2. SYNCHRONISATION AVEC LOCALFORAGE
+      // On force le fetch pour récupérer les données serveur et mettre à jour le cache local
+      console.log("🔄 Synchronisation avec LocalForage...");
+      await fetchUsers();
 
       const updatedUser: User = {
         id: form.id,
@@ -118,8 +129,9 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
       // Notifier le parent + fermer
       onSave(updatedUser);
       onClose();
-    } catch (err) {
-      console.error(err);
+
+    } catch (err: any) {
+      console.error("❌ Erreur update user:", err);
       setError("Erreur lors de la mise à jour de l'utilisateur.");
     } finally {
       setIsLoading(false);

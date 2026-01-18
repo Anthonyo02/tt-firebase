@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useMemo, useCallback, memo } from "react";
+import React, { useState, useMemo, useCallback, memo, useEffect } from "react";
 import {
   Box,
   Card,
@@ -49,6 +49,7 @@ import MaterielViewModal from "../components/modals/MaterielViewModal";
 import ConfirmDialog from "../components/modals/ConfirmDialog";
 import { useConnectionStatus } from "@/hooks/useConnectionStatus";
 import { Materiel, useData } from "@/context/DataContext";
+import storage from "../lib/localforage"; // ✅ Import LocalForage
 
 // ============================================
 // 🚀 SUPPRESSION CLOUDINARY EN BACKGROUND (Fire & Forget)
@@ -358,14 +359,22 @@ const Materiels: React.FC = () => {
   const [searchCategorie, setSearchCategorie] = useState("");
   const [searchStatut, setSearchStatut] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  // ✅ Memoize categories (évite la lecture localStorage à chaque render)
-  const categoriesFromStorage = useMemo(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      return JSON.parse(localStorage.getItem("categorie") || "[]") as string[];
-    } catch {
-      return [];
-    }
+
+  // ✅ Chargement asynchrone des catégories avec LocalForage
+  const [categoriesFromStorage, setCategoriesFromStorage] = useState<string[]>([]);
+
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const cats = await storage.getItem<string[]>("categorie");
+        if (cats) {
+          setCategoriesFromStorage(cats);
+        }
+      } catch (error) {
+        console.error("Erreur chargement catégories localForage", error);
+      }
+    };
+    loadCategories();
   }, []);
 
   // ✅ Memoize filtered materiels
@@ -475,14 +484,14 @@ const Materiels: React.FC = () => {
 
     // 1️⃣ FERMER IMMÉDIATEMENT LE DIALOG (UI instantanée)
     setDeleteTarget(null);
-    setIsLoading(true)
+    setIsLoading(true);
     try {
       // 2️⃣ Supprimer de Firestore (opération principale)
       await deleteMateriel(materielToDelete.id);
 
       // 3️⃣ Supprimer de Cloudinary EN BACKGROUND (fire & forget)
       deleteFromCloudinaryAsync(materielToDelete.imagePublicId);
-      setIsLoading(false)
+      setIsLoading(false);
     } catch (error) {
       console.error("❌ Erreur suppression:", error);
       // TODO: Afficher un toast d'erreur si nécessaire

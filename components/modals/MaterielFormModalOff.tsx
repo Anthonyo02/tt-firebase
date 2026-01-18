@@ -207,7 +207,7 @@ interface Props {
   onSaved?: () => void;
 }
 
-const MaterielFormModal: React.FC<Props> = ({
+const MaterielFormModalOff: React.FC<Props> = ({
   open,
   materiel,
   onClose,
@@ -908,4 +908,4 @@ const MaterielFormModal: React.FC<Props> = ({
   );
 };
 
-export default MaterielFormModal;
+export default MaterielFormModalOff;
