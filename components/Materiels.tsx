@@ -602,7 +602,7 @@ const Materiels: React.FC = () => {
               disabled={isPoor}
               sx={{
                 bgcolor: "white",
-                color: "#818660",
+                color: "primary",
                 fontWeight: 600,
                 px: 3,
                 py: 1.2,
