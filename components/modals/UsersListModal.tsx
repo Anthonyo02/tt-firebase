@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -36,26 +36,16 @@ import {
 import EditUserModal from "./EditUserModal";
 import ConfirmDialog from "./ConfirmDialog";
 
-// 🔥 Import Firebase
-import { db } from "../../lib/firebase";
-import {
-  collection,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  query,
-  orderBy,
-} from "firebase/firestore";
+// 🔥 Import du Contexte (C'est lui qui détient la vérité : LocalForage + Firebase)
+import { useData } from "@/context/DataContext";
 
-// ✅ Import LocalForage
-import storage from "@/lib/localforage";
-
+// Interface locale pour l'affichage (doit correspondre à ce que renvoie le contexte)
 interface User {
   id: string;
   nom: string;
   email: string;
   role: string;
-  createdAt?: number; // ✅ Ajout du timestamp de création
+  createdAt?: number;
 }
 
 interface UsersListModalProps {
@@ -66,14 +56,14 @@ interface UsersListModalProps {
   setReload: () => void;
 }
 
-const STORAGE_KEY = "users";
-
 const UsersListModal: React.FC<UsersListModalProps> = ({
   open,
   onClose,
   openCreate,
 }) => {
-  const [localUsers, setLocalUsers] = useState<User[]>([]);
+  // ✅ On récupère les users et la fonction de suppression depuis le contexte
+  const { users, deleteUser: contextDeleteUser } = useData();
+
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [error, setError] = useState("");
@@ -83,14 +73,8 @@ const UsersListModal: React.FC<UsersListModalProps> = ({
 
   // Couleurs pour les avatars
   const avatarColors = [
-    "#1976d2",
-    "#388e3c",
-    "#f57c00",
-    "#7b1fa2",
-    "#c2185b",
-    "#0097a7",
-    "#5d4037",
-    "#455a64",
+    "#1976d2", "#388e3c", "#f57c00", "#7b1fa2",
+    "#c2185b", "#0097a7", "#5d4037", "#455a64",
   ];
 
   const getAvatarColor = (name: string) => {
@@ -107,107 +91,47 @@ const UsersListModal: React.FC<UsersListModalProps> = ({
       .slice(0, 2);
   };
 
-  // ✅ Fonction pour trier les utilisateurs (plus récent en premier)
-  const sortUsersByDate = (users: User[]): User[] => {
-    return [...users].sort((a, b) => {
+  /* =========================
+     🔥 TRI AUTOMATIQUE
+     On trie dès que la liste 'users' du contexte change
+  ========================== */
+  const sortedUsers = useMemo(() => {
+    // On force le typage ici pour matcher l'interface locale si besoin
+    const list = users as unknown as User[];
+    return [...list].sort((a, b) => {
       const dateA = a.createdAt || 0;
       const dateB = b.createdAt || 0;
-      return dateB - dateA; // Ordre décroissant (plus récent en premier)
+      return dateB - dateA; // Plus récent en premier
     });
-  };
+  }, [users]);
 
   /* =========================
-     🔥 Initial Load from LocalForage
-  ========================== */
-  useEffect(() => {
-    const loadFromStorage = async () => {
-      try {
-        const storedUsers = await storage.getItem<User[]>(STORAGE_KEY);
-        if (storedUsers) {
-          const sorted = sortUsersByDate(storedUsers);
-          setLocalUsers(sorted);
-          setFilteredUsers(sorted);
-        }
-      } catch (err) {
-        console.error("Erreur chargement localForage users:", err);
-      }
-    };
-    loadFromStorage();
-  }, []);
-
-  /* =========================
-     🔥 FIREBASE : Sync Users & Update LocalForage
-  ========================== */
-  useEffect(() => {
-    // ✅ Option 1: Utiliser orderBy si vous avez un index Firestore
-    // const q = query(collection(db, "users"), orderBy("createdAt", "desc"));
-    
-    const unsubscribe = onSnapshot(
-      collection(db, "users"),
-      (snapshot) => {
-        const users: User[] = [];
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          users.push({
-            id: doc.id,
-            nom: data.nom || "",
-            email: data.email || "",
-            role: data.role || "employer",
-            createdAt: data.createdAt || 0, // ✅ Récupérer le timestamp
-          });
-        });
-        
-        // ✅ Trier les utilisateurs par date de création (plus récent en premier)
-        const sortedUsers = sortUsersByDate(users);
-        
-        setLocalUsers(sortedUsers);
-        setFilteredUsers(sortedUsers);
-
-        // ✅ Sauvegarde dans LocalForage
-        storage.setItem(STORAGE_KEY, sortedUsers).catch(console.error);
-      },
-      (err) => {
-        console.error("Erreur Firestore:", err);
-        setError("Impossible de charger les utilisateurs");
-      }
-    );
-
-    return () => unsubscribe();
-  }, []);
-
-  /* =========================
-     Search filter
+     🔍 FILTRE DE RECHERCHE
   ========================== */
   useEffect(() => {
     if (searchQuery.trim() === "") {
-      setFilteredUsers(localUsers);
+      setFilteredUsers(sortedUsers);
     } else {
-      const filtered = localUsers.filter(
+      const filtered = sortedUsers.filter(
         (user) =>
           user.nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
           user.email.toLowerCase().includes(searchQuery.toLowerCase())
       );
-      // ✅ Garder le tri même après filtrage
       setFilteredUsers(filtered);
     }
-  }, [searchQuery, localUsers]);
+  }, [searchQuery, sortedUsers]);
 
   /* =========================
-     🔥 FIREBASE : Delete user + Update LocalForage
+     🗑️ SUPPRESSION VIA CONTEXTE
   ========================== */
   const handleDelete = async () => {
-    setIsLoading(true);
     if (!deleteUser) return;
-
+    setIsLoading(true);
     try {
-      await deleteDoc(doc(db, "users", deleteUser.id));
-
-      const currentUsers = await storage.getItem<User[]>(STORAGE_KEY) || [];
-      const updatedList = currentUsers.filter((u) => u.id !== deleteUser.id);
-      await storage.setItem(STORAGE_KEY, updatedList);
-
+      // On appelle la fonction du contexte qui gère déjà Firebase + LocalForage
+      await contextDeleteUser(deleteUser.id);
       setDeleteUser(null);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       setError("Erreur lors de la suppression");
     } finally {
@@ -216,8 +140,8 @@ const UsersListModal: React.FC<UsersListModalProps> = ({
   };
 
   // Stats
-  const adminCount = localUsers.filter((u) => u.role === "admin").length;
-  const employeeCount = localUsers.filter((u) => u.role !== "admin").length;
+  const adminCount = sortedUsers.filter((u) => u.role === "admin").length;
+  const employeeCount = sortedUsers.filter((u) => u.role !== "admin").length;
 
   return (
     <>
@@ -394,7 +318,6 @@ const UsersListModal: React.FC<UsersListModalProps> = ({
             </Box>
           ) : (
             <List sx={{ p: 2 }}>
-              {/* ✅ SUPPRIMÉ: .reverse() car déjà trié par sortUsersByDate */}
               {filteredUsers.map((user, index) => (
                 <Fade in key={user.id} timeout={300 + index * 100}>
                   <Paper
@@ -549,19 +472,19 @@ const UsersListModal: React.FC<UsersListModalProps> = ({
       </Dialog>
 
       {/* ===== EDIT MODAL ===== */}
+      {/* 
+         Le composant EditUserModal (corrigé précédemment) utilise lui aussi useData.
+         On n'a plus besoin de onSave complexe ici, car le contexte se mettra à jour
+         automatiquement, ce qui mettra à jour 'users' dans ce composant et re-rendra la liste.
+      */}
       {editUser && (
         <EditUserModal
           open
-          user={editUser}
+          user={editUser as any} // Cast si légère différence de typage
           onClose={() => setEditUser(null)}
-          onSave={(updated) => {
-            const updatedUsers = localUsers.map((u) =>
-              u.id === updated.id ? updated : u
-            );
-            const sorted = sortUsersByDate(updatedUsers);
-            setLocalUsers(sorted);
-            setEditUser(null);
-            storage.setItem(STORAGE_KEY, sorted);
+          onSave={() => {
+             // La mise à jour est gérée par le contexte, on ferme juste
+             setEditUser(null);
           }}
         />
       )}

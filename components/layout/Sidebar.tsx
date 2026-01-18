@@ -14,11 +14,12 @@ import {
   useTheme,
   Badge,
 } from "@mui/material";
-import { Dashboard, Folder, Inventory2, Inventory } from "@mui/icons-material";
+import { Dashboard, Folder, Inventory2, Inventory, Web, OfflinePin, WifiOff } from "@mui/icons-material";
 import { useAuth } from "@/context/AuthContext";
 import { usePathname, useRouter } from "next/navigation";
 import logo from "../../public/images/logo.png";
 import Image from "next/image";
+import { useConnectionStatus } from "@/hooks/useConnectionStatus";
 
 interface SidebarProps {
   open: boolean;
@@ -30,22 +31,21 @@ const DRAWER_WIDTH = 260;
 const Sidebar: React.FC<SidebarProps> = ({ open, onClose }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
-  const { isAdmin } = useAuth();
+  const { isOffline } = useConnectionStatus();
 
   const pathname = usePathname();
   const router = useRouter();
 
-  const menuItems = [
-    { text: "Dashboard", icon: <Dashboard />, path: "/" },
-    { text: "Projets", icon: <Folder />, path: "/projets" },
-    { text: "Matériels", icon: <Inventory2 />, path: "/materiels" },
-    { text: "Hors Ligne", icon: <Inventory2 />, path: "/offline" },
-    {
-      text: "Site Web Tolotady",
-      icon: <Inventory2 />,
-      href: "https://tolotady.com",
-    },
-  ];
+ const menuItems = [
+  { text: "Dashboard", icon: <Dashboard />, path: "/" },
+  { text: "Projets", icon: <Folder />, path: "/projets" },
+  { text: "Matériels", icon: <Inventory2 />, path: "/materiels" },
+  ...(isOffline
+    ? [{ text: "Hors Ligne", icon: <WifiOff />, path: "/offline" }]
+    : []),
+
+  { text: "Site Web Tolotady", icon: <Web />, path: "siteweb" },
+];
 
   const handleNavigate = (path: string) => {
     router.push(path);
@@ -92,7 +92,7 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onClose }) => {
       <List sx={{ px: 2, flex: 1 }}>
         {menuItems.map((item) => (
           <ListItem
-            key={item.path || item.href} // utiliser path ou href pour clé unique
+            key={item.path || item.path} // utiliser path ou path pour clé unique
             disablePadding
             sx={{ mb: 0.5 }}
           >
@@ -100,7 +100,7 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onClose }) => {
               onClick={() =>
                 item.path
                   ? handleNavigate(item.path)
-                  : window.open(item.href, "_blank")
+                  : window.open(item.path)
               }
               sx={{
                 borderRadius: 2,

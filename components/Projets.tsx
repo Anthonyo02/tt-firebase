@@ -1,5 +1,5 @@
 "use client";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Box,
   Card,
@@ -26,7 +26,6 @@ import {
   Edit,
   Delete,
   Visibility,
-  Folder,
   LocationOn,
   CheckCircle,
   Schedule,
@@ -35,21 +34,14 @@ import {
 } from "@mui/icons-material";
 
 import { useAuth } from "../context/AuthContext";
-import { Projet } from "../context/DataContext";
+// 🔥 Import du Contexte (C'est lui qui gère LocalForage + Firebase)
+import { useData, Projet } from "../context/DataContext"; 
+
 import ProjetFormModal from "../components/modals/ProjetFormModal";
 import ProjetViewModal from "../components/modals/ProjetViewModal";
 import ConfirmDialog from "../components/modals/ConfirmDialog";
 
 import { useRouter, useSearchParams } from "next/navigation";
-
-// 🔥 FIREBASE
-import { collection, deleteDoc, doc, onSnapshot } from "firebase/firestore";
-import { db } from "../lib/firebase";
-
-// ✅ Import LocalForage
-import storage from "../lib/localforage";
-
-const STORAGE_KEY = "projets";
 
 /* =====================================================
    STATUS CONFIG
@@ -102,32 +94,21 @@ const formatDate = (dateStr?: string) => {
   });
 };
 
-const normalizeProjet = (raw: any): Projet => ({
-  id: String(raw.id ?? ""),
-  titre: String(raw.titre ?? ""),
-  lieu: String(raw.lieu ?? ""),
-  lieu_link: String(raw.lieu_link ?? ""),
-  date_debut: String(raw.date_debut ?? ""),
-  date_fin: raw.date_fin ? String(raw.date_fin) : undefined,
-  responsable: String(raw.responsable ?? ""),
-  equipe: Array.isArray(raw.equipe) ? raw.equipe : [],
-  materiel: Array.isArray(raw.materiel) ? raw.materiel : [],
-  detail: String(raw.detail ?? ""),
-  status: raw.status ?? "en cours",
-  commentaire: String(raw.commentaire ?? ""),
-});
-
 /* =====================================================
    COMPONENT
 ===================================================== */
 const Projets: React.FC = () => {
   const { isAdmin } = useAuth();
+  
+  // ✅ On récupère les données et la fonction delete depuis le Contexte
+  const { projets, deleteProjet: contextDeleteProjet } = useData();
+  
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const statusFilter = searchParams.get("status") || "tous";
 
-  const [projets, setProjets] = useState<Projet[]>([]);
+  // Plus besoin de state local 'projets', on utilise celui du contexte
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -140,47 +121,12 @@ const Projets: React.FC = () => {
     projet: Projet;
   } | null>(null);
 
-  // ✅ Chargement initial depuis LocalForage (Asynchrone)
-  useEffect(() => {
-    const loadFromStorage = async () => {
-      try {
-        const storedProjets = await storage.getItem<Projet[]>(STORAGE_KEY);
-        if (storedProjets && Array.isArray(storedProjets)) {
-          setProjets(storedProjets.map(normalizeProjet));
-        }
-      } catch (error) {
-        console.error("Erreur chargement localForage projets:", error);
-      }
-    };
-    loadFromStorage();
-  }, []);
-
-  /* =====================================================
-     🔥 FIRESTORE REALTIME SYNC
-  ===================================================== */
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, "projets"), (snap) => {
-      const data: Projet[] = snap.docs.map((d) =>
-        normalizeProjet({ id: d.id, ...d.data() })
-      );
-      
-      // Mise à jour du state
-      setProjets(data);
-      
-      // ✅ Sauvegarde dans LocalForage
-      storage.setItem(STORAGE_KEY, data).catch(err => 
-        console.error("Erreur sauvegarde localForage:", err)
-      );
-    });
-
-    return () => unsub();
-  }, []);
-
   /* =====================================================
      FILTERS
   ===================================================== */
   const filteredProjets = useMemo(() => {
     const q = search.toLowerCase();
+    // On filtre sur la liste venant du contexte
     return projets.filter((p) => {
       const matchText =
         p.titre.toLowerCase().includes(q) ||
@@ -205,24 +151,20 @@ const Projets: React.FC = () => {
   }, [projets]);
 
   /* =====================================================
-     DELETE
+     DELETE (Via Context)
   ===================================================== */
   const handleDelete = async () => {
     if (!deleteProjet) return;
     setIsLoading(true);
 
-    // Optimistic UI update (Optionnel mais recommandé)
-    const newProjets = projets.filter(p => p.id !== deleteProjet.id);
-    setProjets(newProjets);
-    storage.setItem(STORAGE_KEY, newProjets);
-
     try {
-      await deleteDoc(doc(db, "projets", deleteProjet.id));
+      // ✅ Appel au contexte qui gère Firestore et LocalForage
+      await contextDeleteProjet(deleteProjet.id);
+      
       setDeleteProjet(null);
       setMenuAnchor(null);
     } catch (error) {
       console.error("Erreur suppression:", error);
-      // Rollback si erreur (recharger depuis localForage ou Firestore se fera automatiquement)
     } finally {
       setIsLoading(false);
     }
@@ -237,7 +179,7 @@ const Projets: React.FC = () => {
       params.set("status", st);
     }
 
-    router.replace(`?${params.toString()}`); // remplace l'URL sans recharger
+    router.replace(`?${params.toString()}`); 
   };
 
   /* =====================================================
@@ -363,6 +305,7 @@ const Projets: React.FC = () => {
         })}
       </Grid>
 
+      {/* Menu Contextuel */}
       <Menu
         anchorEl={menuAnchor?.el}
         open={Boolean(menuAnchor)}
@@ -388,6 +331,7 @@ const Projets: React.FC = () => {
         </MenuItem>
       </Menu>
 
+      {/* Modals */}
       <ProjetFormModal
         open={showForm || Boolean(editProjet)}
         projet={editProjet}

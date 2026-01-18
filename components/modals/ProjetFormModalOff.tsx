@@ -59,7 +59,6 @@ const Transition = forwardRef(function Transition(
 // =======================
 interface ProjetFormModalProps {
   open: boolean;
-  projet: Projet | null;
   onClose: () => void;
 }
 
@@ -88,7 +87,6 @@ interface FormState {
 // =======================
 const ProjetFormModalOff: React.FC<ProjetFormModalProps> = ({
   open,
-  projet,
   onClose,
 }) => {
   // =======================
@@ -212,7 +210,7 @@ const ProjetFormModalOff: React.FC<ProjetFormModalProps> = ({
         // Exclure le projet en cours d'édition de son propre calcul de stock
         // et exclure les projets "annuller" ou "terminer" du calcul du stock.
         if (
-          (projet && String(p.id) === String(projet.id)) ||
+          // (projet && String(p.id) === String(projet.id)) ||
           p.status === "annuller" ||
          p.status === "terminer" // <-- Ajout de cette condition
         ) {
@@ -231,7 +229,7 @@ const ProjetFormModalOff: React.FC<ProjetFormModalProps> = ({
       }
       return totalUtilise;
     },
-    [projets, projet, isProjetOverlapping, extractMaterielsFromProjet]
+    [projets,  isProjetOverlapping, extractMaterielsFromProjet]
   );
 
   const materielsDisponibles = useMemo(() => {
@@ -321,8 +319,8 @@ const ProjetFormModalOff: React.FC<ProjetFormModalProps> = ({
   useEffect(() => {
     if (!open) return; // Ne rien faire si le modal n'est pas ouvert
     if (!form.date_debut) return;
-    if (projet && isManualStatusChange.current) return; // Ne pas écraser un changement manuel de statut
-    if (projet && initialDateDebut.current === form.date_debut) return; // Ne pas changer si la date de début n'a pas changé
+    // if (projet && isManualStatusChange.current) return; // Ne pas écraser un changement manuel de statut
+    // if (projet && initialDateDebut.current === form.date_debut) return; // Ne pas changer si la date de début n'a pas changé
 
     // La logique de détermination du statut automatique
     const newAutoStatus = isDateDebutPassed(form.date_debut)
@@ -340,20 +338,20 @@ const ProjetFormModalOff: React.FC<ProjetFormModalProps> = ({
     }));
 
     isManualStatusChange.current = false; // Réinitialiser après l'exécution de l'effet
-  }, [form.date_debut, projet, isDateDebutPassed, open]);
+  }, [form.date_debut,  isDateDebutPassed, open]);
 
 
   const handleStatusChange = useCallback(
     (newStatus: "en cours" | "annuller") => {
-      if (!projet) {
-        setError("Impossible de changer le statut en création.");
-        return;
-      }
+      // if (!projet) {
+      //   setError("Impossible de changer le statut en création.");
+      //   return;
+      // }
       // Logique simple de bascule
       setForm((p) => ({ ...p, status: newStatus }));
       isManualStatusChange.current = true; // Indiquer un changement manuel
     },
-    [projet]
+    []
   );
 
   const handleChange = useCallback((field: keyof FormState, value: any) => {
@@ -372,59 +370,59 @@ const ProjetFormModalOff: React.FC<ProjetFormModalProps> = ({
   }, []);
 
   // Initialisation du formulaire
-  useEffect(() => {
-    if (!open) return; // Ne rien faire si le modal est fermé
+  // useEffect(() => {
+  //   if (!open) return; // Ne rien faire si le modal est fermé
 
-    isManualStatusChange.current = false; // Réinitialiser le drapeau manuel
+  //   isManualStatusChange.current = false; // Réinitialiser le drapeau manuel
 
-    if (projet) {
-      const existingMateriel = extractMaterielsFromProjet(projet);
-      const dateDebut = projet.date_debut || "";
-      initialDateDebut.current = dateDebut; // Stocker la date de début initiale
+  //   if (projet) {
+  //     const existingMateriel = extractMaterielsFromProjet(projet);
+  //     const dateDebut = projet.date_debut || "";
+  //     initialDateDebut.current = dateDebut; // Stocker la date de début initiale
 
-      setForm({
-        titre: projet.titre ?? "",
-        lieu: projet.lieu ?? "",
-        lieu_link: projet.lieu_link ?? "",
-        date_debut: dateDebut,
-        date_fin: projet.date_fin || "",
-        responsable: projet.responsable ?? "",
-        equipe: Array.isArray(projet.equipe) ? projet.equipe : [],
-        materiel: existingMateriel,
-        detail: projet.detail ?? "",
-        status: projet.status ?? "en cours",
-        commentaire: projet.commentaire ?? "",
-      });
-    } else {
-      // Pour un nouveau projet, définir les valeurs par défaut
-      const now = new Date();
-      // Ajustement pour le fuseau horaire local pour que toISOString() donne la bonne date/heure locale
-      const offset = now.getTimezoneOffset() * 60000;
-      const todayString = new Date(now.getTime() - offset)
-        .toISOString()
-        .slice(0, 16); // Format YYYY-MM-DDTHH:MM
+  //     setForm({
+  //       titre: projet.titre ?? "",
+  //       lieu: projet.lieu ?? "",
+  //       lieu_link: projet.lieu_link ?? "",
+  //       date_debut: dateDebut,
+  //       date_fin: projet.date_fin || "",
+  //       responsable: projet.responsable ?? "",
+  //       equipe: Array.isArray(projet.equipe) ? projet.equipe : [],
+  //       materiel: existingMateriel,
+  //       detail: projet.detail ?? "",
+  //       status: projet.status ?? "en cours",
+  //       commentaire: projet.commentaire ?? "",
+  //     });
+  //   } else {
+  //     // Pour un nouveau projet, définir les valeurs par défaut
+  //     const now = new Date();
+  //     // Ajustement pour le fuseau horaire local pour que toISOString() donne la bonne date/heure locale
+  //     const offset = now.getTimezoneOffset() * 60000;
+  //     const todayString = new Date(now.getTime() - offset)
+  //       .toISOString()
+  //       .slice(0, 16); // Format YYYY-MM-DDTHH:MM
 
-      initialDateDebut.current = null; // Pas de date initiale pour un nouveau projet
-      setForm({
-        titre: "",
-        lieu: "",
-        lieu_link: "",
-        date_debut: todayString,
-        date_fin: "",
-        responsable: "",
-        equipe: [],
-        materiel: [],
-        detail: "",
-        status: "en cours",
-        commentaire: "",
-      });
-    }
+  //     initialDateDebut.current = null; // Pas de date initiale pour un nouveau projet
+  //     setForm({
+  //       titre: "",
+  //       lieu: "",
+  //       lieu_link: "",
+  //       date_debut: todayString,
+  //       date_fin: "",
+  //       responsable: "",
+  //       equipe: [],
+  //       materiel: [],
+  //       detail: "",
+  //       status: "en cours",
+  //       commentaire: "",
+  //     });
+  //   }
 
-    // Réinitialiser les messages d'état
-    setError("");
-    setSuccess(false);
-    setSubmitted(false);
-  }, [projet, open, extractMaterielsFromProjet]);
+  //   // Réinitialiser les messages d'état
+  //   setError("");
+  //   setSuccess(false);
+  //   setSubmitted(false);
+  // }, [ open, extractMaterielsFromProjet]);
 
   // =======================
   // SAUVEGARDE & LOCALFORAGE
@@ -449,11 +447,11 @@ const ProjetFormModalOff: React.FC<ProjetFormModalProps> = ({
       console.log("💾 Sauvegarde en cours...");
 
       // 1. Sauvegarde dans Firebase via le Contexte
-      if (projet) {
-        await updateProjet(projet.id, form);
-      } else {
-        await addProjet(form);
-      }
+      // if () {
+      //   await updateProjet( form);
+      // } else {
+      //   await addProjet(form);
+      // }
 
       // 2. SYNCHRONISATION CRITIQUE AVEC LOCALFORAGE
       // On force le fetch pour récupérer les dernières données du serveur
@@ -473,7 +471,7 @@ const ProjetFormModalOff: React.FC<ProjetFormModalProps> = ({
   }, [
     isFormValid,
     verifierConflitsMateriel,
-    projet,
+    // projet,
     form,
     addProjet,
     updateProjet,
@@ -492,7 +490,7 @@ const ProjetFormModalOff: React.FC<ProjetFormModalProps> = ({
     return value ? value.replace("T", " ") : "";
   }, []);
 
-  const isUpdateMode = !!projet;
+  const isUpdateMode = "s";
   const canToggleToAnnuler = isUpdateMode && form.status === "en cours";
   const canToggleToEncours = isUpdateMode && form.status === "annuller";
   const userNames = useMemo(() => users.map((u) => u.nom), [users]);
@@ -502,7 +500,7 @@ const ProjetFormModalOff: React.FC<ProjetFormModalProps> = ({
   // =======================
   return (
     <>
-      {/* <Dialog
+      <Dialog
         open={open}
         onClose={!loading ? onClose : undefined}
         maxWidth="sm"
@@ -545,7 +543,7 @@ const ProjetFormModalOff: React.FC<ProjetFormModalProps> = ({
 
             <Box>
               <Typography variant="h5" fontWeight={700} color="white">
-                {projet ? "Modifier le projet" : "Nouveau projet"}
+                {"Nouveau projet"}
               </Typography>
 
               <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1 }}>
@@ -945,8 +943,7 @@ const ProjetFormModalOff: React.FC<ProjetFormModalProps> = ({
           setMapModalOpen(false);
         }}
         initialValue={form.lieu_link}
-      /> */}
-      <Typography variant="h1">projet offligne</Typography>
+      />
     </>
   );
 };

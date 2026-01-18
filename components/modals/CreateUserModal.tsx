@@ -102,6 +102,7 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({
   };
 
   const handleClose = () => {
+     onClose();
     if (!isLoading) {
       setForm({ id: "", nom: "", email: "", password: "", role: "employer" });
       setError("");

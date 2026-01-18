@@ -20,10 +20,10 @@ import {
 } from "firebase/firestore";
 
 // ✅ Import LocalForage
-import storage from "../lib/localforage"; // Ton fichier configuré
+import storage from "../lib/localforage";
 
 // =======================
-// INTERFACES
+// INTERFACES (Inchangées)
 // =======================
 
 export interface User {
@@ -106,26 +106,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
   const [materiels, setMateriels] = useState<Materiel[]>([]);
   const [offlineQueue, setOfflineQueue] = useState<OfflineItem[]>([]);
   const [isLoad, setIsLoad] = useState(false);
-  const [isLoading, setIsLoading] = useState(true); // Start loading true
-  const [isOnline, setIsOnline] = useState(true); // Default to true, update in effect
+  const [isLoading, setIsLoading] = useState(true);
+  const [isOnline, setIsOnline] = useState(true);
 
   const [references, setReferences] = useState<string[]>([]);
   const [categorie, setCategorie] = useState<string[]>([]);
   const [users, setUsers] = useState<User[]>([]);
 
   const [teamMembers, setTeamMembers] = useState<string[]>([
-    "Miary",
-    "Oly",
-    "Aina",
-    "Thony",
-    "Dio",
+    "Miary", "Oly", "Aina", "Thony", "Dio",
   ]);
 
   // =======================
   // UTILS STORAGE
   // =======================
-
-  // Fonction helper pour sauvegarder dans localForage (asynchrone)
   const saveToStorage = useCallback(async (key: string, data: any) => {
     try {
       await storage.setItem(key, data);
@@ -139,11 +133,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
   // =======================
 
   useEffect(() => {
-    // Check initial status
     if (typeof navigator !== "undefined") {
       setIsOnline(navigator.onLine);
     }
-    
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
     window.addEventListener("online", handleOnline);
@@ -157,7 +149,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
   const handleLoad = useCallback(async () => {
     setIsLoading(true);
     try {
-      // 1. Charger depuis LocalForage (Parallèle pour la vitesse)
+      // 1. Charger depuis LocalForage
       const [
         storedProjets,
         storedMateriels,
@@ -165,7 +157,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
         storedRefs,
         storedCat,
         storedTeam,
-        storedQueue
+        storedQueue,
       ] = await Promise.all([
         storage.getItem<Projet[]>("projets"),
         storage.getItem<Materiel[]>("materiels"),
@@ -176,7 +168,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
         storage.getItem<OfflineItem[]>("offlineQueue"),
       ]);
 
-      // 2. Mettre à jour le state si données présentes
       if (storedProjets) setProjets(storedProjets);
       if (storedMateriels) setMateriels(storedMateriels);
       if (storedUsers) setUsers(storedUsers);
@@ -189,17 +180,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
       console.error("Erreur chargement localForage:", error);
     } finally {
       setIsLoading(false);
-      
-      // 3. Ensuite fetch Firebase (background update)
+      // 2. Fetch Firebase UNIQUEMENT si on est vraiment en ligne
       if (navigator.onLine) {
-        fetchProjets();
-        fetchMateriels();
-        fetchUsers();
+        // On attend un peu pour être sûr que la connexion est stable
+        setTimeout(() => {
+            fetchProjets();
+            fetchMateriels();
+            fetchUsers();
+        }, 1000);
       }
     }
   }, []);
 
-  // Déclencheur manuel via setIsLoad
   useEffect(() => {
     if (isLoad) {
       handleLoad();
@@ -207,7 +199,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [isLoad, handleLoad]);
 
-  // Chargement initial au montage
   useEffect(() => {
     handleLoad();
   }, []);
@@ -216,10 +207,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
   // 🔥 USERS (FIRESTORE)
   // =======================
   const fetchUsers = async () => {
+    // ⛔️ STOP si hors ligne pour ne pas écraser les données locales
+    if (!navigator.onLine) return; 
+
     try {
       const querySnapshot = await getDocs(collection(db, "users"));
-      const formattedUsers: User[] = [];
+      
+      // 🛡️ SÉCURITÉ : Si Firestore renvoie vide mais qu'on a des données locales, on n'écrase pas.
+      // Cela arrive si "navigator.onLine" est true mais que le backend est inaccessible.
+      if (querySnapshot.empty && users.length > 0) {
+        console.warn("Fetch Users vide alors que données locales existent. Annulation.");
+        return;
+      }
 
+      const formattedUsers: User[] = [];
       querySnapshot.forEach((doc) => {
         const data = doc.data();
         formattedUsers.push({
@@ -243,13 +244,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
 
     setUsers((prev) => {
       const updated = [...prev, newUser];
-      saveToStorage("users", updated); // Fire and forget
+      saveToStorage("users", updated);
       return updated;
     });
 
     try {
       await addDoc(collection(db, "users"), user);
-      await fetchUsers();
+      if (navigator.onLine) await fetchUsers();
     } catch (error) {
       console.error("Erreur addUser:", error);
     }
@@ -266,12 +267,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
       const userRef = doc(db, "users", id);
       await updateDoc(userRef, user);
       
-      // Mise à jour de l'utilisateur stocké en local si c'est le current user
       const storedUser = await storage.getItem<User>("user");
       if (storedUser && storedUser.id === id) {
           await storage.setItem("user", { ...storedUser, ...user });
       }
-
     } catch (error) {
       console.error("Erreur updateUser:", error);
     }
@@ -295,10 +294,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
   // 🔥 PROJETS (FIRESTORE)
   // =======================
   const fetchProjets = async () => {
+    if (!navigator.onLine) return; // ⛔️ STOP si hors ligne
+
     try {
       const querySnapshot = await getDocs(collection(db, "projets"));
-      const formattedProjets: Projet[] = [];
 
+      // 🛡️ SÉCURITÉ Anti-écrasement
+      if (querySnapshot.empty && projets.length > 0) {
+        console.warn("Fetch Projets vide alors que données locales existent. Annulation.");
+        return;
+      }
+
+      const formattedProjets: Projet[] = [];
       querySnapshot.forEach((doc) => {
         const p = doc.data();
         formattedProjets.push({
@@ -335,11 +342,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     });
 
     try {
-      const cleanProjet = JSON.parse(JSON.stringify(projet)); // Clean undefined
+      const cleanProjet = JSON.parse(JSON.stringify(projet));
       await addDoc(collection(db, "projets"), cleanProjet);
-      fetchProjets();
+      if (navigator.onLine) fetchProjets();
     } catch (error) {
-      console.error("Erreur addProjet:", error);
+      console.error("Erreur addProjet (passage en offline queue):", error);
       addToOfflineQueue({
         id: tempId,
         type: "projet",
@@ -383,10 +390,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
   // 🔥 MATÉRIELS (FIRESTORE)
   // =======================
   const fetchMateriels = async () => {
+    if (!navigator.onLine) return; // ⛔️ STOP si hors ligne
+
     try {
       const querySnapshot = await getDocs(collection(db, "materiels"));
-      const formattedMateriels: Materiel[] = [];
 
+      // 🛡️ SÉCURITÉ Anti-écrasement
+      if (querySnapshot.empty && materiels.length > 0) {
+        console.warn("Fetch Materiels vide alors que données locales existent. Annulation.");
+        return;
+      }
+
+      const formattedMateriels: Materiel[] = [];
       querySnapshot.forEach((doc) => {
         const m = doc.data();
         formattedMateriels.push({
@@ -406,7 +421,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
       setMateriels(formattedMateriels);
       await saveToStorage("materiels", formattedMateriels);
 
-      // Extraire références et catégories
       const refs = [...new Set(formattedMateriels.map((m) => m.reference).filter(Boolean))];
       setReferences(refs);
       await saveToStorage("references", refs);
@@ -438,7 +452,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
 
     try {
       await addDoc(collection(db, "materiels"), newMaterielData);
-      await fetchMateriels();
+      if (navigator.onLine) await fetchMateriels();
     } catch (error) {
       console.error("Erreur addMateriel:", error);
     }
@@ -449,13 +463,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     materiel: Partial<Materiel> & { imageBase64?: string; mimeType?: string }
   ) => {
     let updates: any = { ...materiel };
-
     if (updates.imageBase64) {
       updates.imageUrl = updates.imageBase64;
       delete updates.imageBase64;
       delete updates.mimeType;
     }
-
     if (updates.quantites) {
       updates.quantites = Number(updates.quantites);
     }
@@ -470,7 +482,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
       const matRef = doc(db, "materiels", id);
       await updateDoc(matRef, updates);
 
-      // Update refs/cats
       if (materiel.reference && !references.includes(materiel.reference)) {
         const updatedRefs = [...references, materiel.reference];
         setReferences(updatedRefs);
@@ -483,12 +494,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     } catch (error) {
       console.error("Erreur updateMateriel:", error);
-      addToOfflineQueue({
-        id,
-        type: "materiel",
-        action: "update",
-        data: updates,
-      });
+      addToOfflineQueue({ id, type: "materiel", action: "update", data: updates });
     }
   };
 
@@ -501,8 +507,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
 
     try {
       await deleteDoc(doc(db, "materiels", id));
-
-      if (imagePublicId) {
+      if (imagePublicId && navigator.onLine) {
         fetch("/api/cloudinary/delete", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -526,8 +531,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const syncOfflineData = async () => {
-    if (offlineQueue.length > 0) {
+    if (offlineQueue.length > 0 && navigator.onLine) {
       console.log("Syncing Firestore pending writes...");
+      // Ici vous devriez implémenter la logique de retry réelle
+      // Pour l'instant, on vide la queue après reconnexion
       setOfflineQueue([]);
       await saveToStorage("offlineQueue", []);
 

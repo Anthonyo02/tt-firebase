@@ -12,6 +12,7 @@ import React, {
 } from "react";
 import imageCompression from "browser-image-compression";
 import Cropper, { Area } from "react-easy-crop";
+import storage from "@/lib/localforage"; // Importe ton storage localforage
 
 import {
   Dialog,
@@ -71,7 +72,7 @@ const Transition = forwardRef(function Transition(
   return <Slide direction="up" ref={ref} {...props} />;
 });
 
-// Options de compression (rapide et léger pour accélérer l'upload final)
+// Options de compression
 const COMPRESSION_OPTIONS = {
   maxSizeMB: 0.2,
   maxWidthOrHeight: 1024,
@@ -151,50 +152,41 @@ async function getCroppedImgBlob(
 }
 
 // ============================================
-// CLOUDINARY
+// LOCALFORAGE HELPERS
 // ============================================
 
-type CloudinaryUploadResult = {
-  imageUrl: string;
-  imagePublicId: string;
+// Type pour le matériel offline (avec image en base64)
+interface MaterielOffline extends Omit<MaterielType, 'imageUrl' | 'imagePublicId'> {
+  imageBase64: string | null;
+  createdAt: number;
+}
+
+// Convertir Blob en Base64
+const blobToBase64 = (blob: Blob): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 };
 
-const uploadToCloudinary = async (blob: Blob): Promise<CloudinaryUploadResult> => {
-  try {
-    const formData = new FormData();
-    formData.append("file", blob, "image.webp");
-    formData.append("upload_preset", "not_signed");
-    formData.append("folder", "materiels");
-
-    const cloudName = "dmvsypdvu";
-    const url = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
-
-    const response = await fetch(url, { method: "POST", body: formData });
-
-    if (!response.ok) {
-      throw new Error("Échec de l'upload");
-    }
-
-    const data = await response.json();
-    
-    return {
-      imageUrl: data.secure_url,
-      imagePublicId: data.public_id,
-    };
-  } catch (error: any) {
-    console.error("❌ Erreur Cloudinary:", error.message);
-    throw new Error("Échec de l'upload de l'image");
-  }
+// Récupérer les matériels offline
+const getMaterielOffline = async (): Promise<MaterielOffline[]> => {
+  const data = await storage.getItem<MaterielOffline[]>("materialoff");
+  return data || [];
 };
 
-const deleteFromCloudinary = async (publicId: string): Promise<void> => {
-  if (!publicId) return;
-  console.log("🗑️ Suppression Cloudinary:", publicId);
-  fetch("/api/cloudinary/delete", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ publicId }),
-  }).catch(console.error);
+// Sauvegarder un matériel offline
+const saveMaterielOffline = async (materiel: MaterielOffline): Promise<void> => {
+  const existing = await getMaterielOffline();
+  existing.push(materiel);
+  await storage.setItem("materialoff", existing);
+};
+
+// Générer un ID unique
+const generateId = (): string => {
+  return `offline_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 };
 
 // ============================================
@@ -202,20 +194,14 @@ const deleteFromCloudinary = async (publicId: string): Promise<void> => {
 // ============================================
 interface Props {
   open: boolean;
-  materiel: MaterielType | null;
   onClose: () => void;
-  onSaved?: () => void;
 }
 
 const MaterielFormModalOff: React.FC<Props> = ({
   open,
-  materiel,
   onClose,
-  onSaved,
 }) => {
-  // On récupère fetchMateriels en plus pour forcer un refresh si besoin, 
-  // bien que add/update le fassent déjà.
-  const { addMateriel, updateMateriel, categorie, references, materiels } = useData();
+  const { categorie, references, materiels } = useData();
 
   // FORM
   const [form, setForm] = useState<MaterielType>({
@@ -271,23 +257,6 @@ const MaterielFormModalOff: React.FC<Props> = ({
     };
   }, [imagePreview, tempImageUrl]);
 
-  // Init form
-  useEffect(() => {
-    if (!open) return;
-
-    if (materiel) {
-      setForm(materiel);
-      setImagePreview(materiel.imageUrl || null);
-      setImageBlob(null);
-      setImageRemoved(false);
-      setReferenceError(null);
-      setReferenceNumError(null);
-      setImageError(null);
-    } else {
-      resetForm();
-    }
-  }, [open, materiel]);
-
   const resetForm = () => {
     setForm({
       id: "",
@@ -332,29 +301,11 @@ const MaterielFormModalOff: React.FC<Props> = ({
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const getNextSuffixForReference = useCallback(
-    (reference: string): string => {
-      if (!reference || !materiels || materiels.length === 0) return "1";
-      const related = materiels.filter((m) => m.reference === reference && m.id !== materiel?.id);
-      if (related.length === 0) return "1";
-      const nums = related
-        .map((m) => {
-          const match = m.referenceNum?.match(/\d+/);
-          return match ? parseInt(match[0], 10) : 0;
-        })
-        .filter((n) => n > 0);
-      return nums.length ? String(Math.max(...nums) + 1) : "1";
-    },
-    [materiels, materiel?.id],
-  );
-
   const handleReferenceSelectChange = (value: string) => {
     setForm((prev) => ({ ...prev, reference: value }));
     if (value && materiels) {
-      const count = materiels.filter((m) => m.reference === value && m.id !== materiel?.id).length;
+      const count = materiels.filter((m) => m.reference === value && m.id).length;
       setExistingCount(count);
-      const next = getNextSuffixForReference(value);
-      setForm((prev) => ({ ...prev, referenceNum: next }));
     } else {
       setExistingCount(0);
       setForm((prev) => ({ ...prev, referenceNum: "" }));
@@ -365,8 +316,6 @@ const MaterielFormModalOff: React.FC<Props> = ({
     const formatted = value.startsWith("T-T") ? value : `T-T${value}`;
     setForm((prev) => ({ ...prev, reference: formatted }));
     setReferenceError(null);
-    const next = getNextSuffixForReference(formatted);
-    setForm((prev) => ({ ...prev, referenceNum: next }));
   };
 
   const toggleNewRef = () => {
@@ -473,60 +422,42 @@ const MaterielFormModalOff: React.FC<Props> = ({
   const handleClickCamera = () => cameraInputRef.current?.click();
 
   // --------------------------------------------
-  // SAVE
+  // SAVE - Stockage local uniquement
   // --------------------------------------------
   const handleSave = async () => {
     if (!form.nom) return;
     setIsLoading(true);
 
     try {
-      let finalImageUrl = form.imageUrl || "";
-      let finalImagePublicId = form.imagePublicId || "";
-      const oldPublicId = materiel?.imagePublicId || form.imagePublicId;
+      // Convertir l'image en base64 si elle existe
+      let imageBase64: string | null = null;
       
-      // 1. GESTION DES IMAGES
-      if (imageRemoved) {
-        console.log("🚫 Image supprimée");
-        finalImageUrl = "";
-        finalImagePublicId = "";
-        if (oldPublicId) {
-          deleteFromCloudinary(oldPublicId);
-        }
-      } 
-      else if (imageBlob) {
-        console.log("📤 Upload vers Cloudinary...");
-        const uploadResult = await uploadToCloudinary(imageBlob);
-        finalImageUrl = uploadResult.imageUrl;
-        finalImagePublicId = uploadResult.imagePublicId;
-        onClose();
-        
-        if (oldPublicId && oldPublicId !== finalImagePublicId) {
-          deleteFromCloudinary(oldPublicId);
-        }
+      if (!imageRemoved && imageBlob) {
+        imageBase64 = await blobToBase64(imageBlob);
       }
       
-      // 2. PRÉPARATION DU PAYLOAD
-      const payload: MaterielType = {
-        ...form,
-        imageUrl: finalImageUrl,
-        imagePublicId: finalImagePublicId,
+      // Préparer le matériel offline
+      const materielOffline: MaterielOffline = {
+        id: generateId(),
+        nom: form.nom,
+        quantites: form.quantites,
+        reference: form.reference,
+        referenceNum: form.referenceNum,
+        description: form.description,
+        statut: form.statut,
+        comentaire: form.comentaire,
+        imageBase64: imageBase64,
+        createdAt: Date.now(),
       };
       
-      console.log("💾 Sauvegarde dans Firebase et LocalForage...", payload);
+      // Sauvegarder dans LocalForage
+      await saveMaterielOffline(materielOffline);
       
-      // 3. SAUVEGARDE & SYNCHRONISATION
-      // Note: addMateriel et updateMateriel du DataContext s'occupent 
-      // de mettre à jour Firestore PUIS de re-fetcher les données 
-      // pour mettre à jour localForage avec les données serveur.
-      if (materiel?.id) {
-        await updateMateriel(materiel.id, payload);
-      } else {
-        await addMateriel(payload);
-      }
+      console.log("✅ Matériel sauvegardé offline:", materielOffline.id);
+      
+      // Fermer et réinitialiser
+      resetForm();
       onClose();
-
-      // Une fois await terminé ici, le localForage est à jour via le contexte.
-      if (onSaved) onSaved();
 
     } catch (err) {
       console.error("❌ ERREUR SAUVEGARDE:", err);
@@ -580,10 +511,10 @@ const MaterielFormModalOff: React.FC<Props> = ({
             </Avatar>
             <Box>
               <Typography variant="h5" fontWeight={700} color="white">
-                {materiel ? "Modifier le matériel" : "Nouveau matériel"}
+                Nouveau matériel (Offline)
               </Typography>
               <Typography variant="body2" color="rgba(255,255,255,0.8)">
-                Gestion des équipements
+                Sauvegarde locale
               </Typography>
             </Box>
           </Box>
@@ -807,10 +738,10 @@ const MaterielFormModalOff: React.FC<Props> = ({
             variant="contained"
             onClick={handleSave}
             disabled={!isFormValid()}
-            startIcon={isLoading ? null : <Done />}
+            startIcon={isLoading ? <CircularProgress size={16} color="inherit" /> : <Done />}
             sx={{ minWidth: 120, width: { xs: "100%", sm: "auto" } }}
           >
-            {isLoading ? <CircularProgress size={20} color="inherit" /> : materiel ? "Sauvegarder" : "Créer"}
+            {isLoading ? "Sauvegarde..." : "Créer"}
           </Button>
         </DialogActions>
       </Dialog>
