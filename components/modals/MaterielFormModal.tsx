@@ -504,6 +504,7 @@ const MaterielFormModal: React.FC<Props> = ({
         
         // C'est ici qu'on upload maintenant
         const uploadResult = await uploadToCloudinary(imageBlob);
+        onClose();
         
         finalImageUrl = uploadResult.imageUrl;
         finalImagePublicId = uploadResult.imagePublicId;
@@ -533,7 +534,6 @@ const MaterielFormModal: React.FC<Props> = ({
       }
 
       if (onSaved) onSaved();
-      onClose();
     } catch (err) {
       console.error("❌ ERREUR SAUVEGARDE:", err);
       setImageError("Erreur lors de la sauvegarde.");
