@@ -20,25 +20,37 @@ export async function POST(req: Request) {
     const buffer = Buffer.from(await file.arrayBuffer());
 
     const uploadOptions: Record<string, any> = {
-      folder: "website_slides", // 🔹 Dossier spécifique pour le site
       resource_type: "image",
       format: "webp",
       quality: "auto:good",
       fetch_format: "auto",
     };
 
-    // Si on remplace une image existante
     if (existingPublicId) {
-       // Extraction de l'ID si nécessaire, ou utilisation directe
+      // ✅ CORRECTION: Ne PAS mettre folder car publicId contient déjà le chemin complet
+      // Ex: existingPublicId = "website_slides/abc123" 
+      // On l'utilise tel quel sans rajouter folder
       uploadOptions.public_id = existingPublicId;
       uploadOptions.overwrite = true;
       uploadOptions.invalidate = true;
+      
+      console.log("🔄 Overwrite image:", existingPublicId);
+    } else {
+      // ✅ Nouvelle image seulement: on spécifie le folder
+      uploadOptions.folder = "website_slides";
+      
+      console.log("📤 Nouvelle image dans folder: website_slides");
     }
 
     const result = await new Promise<any>((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(uploadOptions, (error, res) => {
-        if (error) reject(error);
-        else resolve(res);
+        if (error) {
+          console.error("❌ Cloudinary stream error:", error);
+          reject(error);
+        } else {
+          console.log("✅ Upload réussi:", res?.public_id);
+          resolve(res);
+        }
       });
       stream.end(buffer);
     });
@@ -47,8 +59,8 @@ export async function POST(req: Request) {
       imageUrl: result.secure_url,
       imagePublicId: result.public_id,
     });
-  } catch (error) {
-    console.error("Cloudinary upload error:", error);
-    return NextResponse.json({ error: "Upload error" }, { status: 500 });
+  } catch (error: any) {
+    console.error("❌ Cloudinary upload error:", error.message || error);
+    return NextResponse.json({ error: error.message || "Upload error" }, { status: 500 });
   }
 }

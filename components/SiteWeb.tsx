@@ -32,6 +32,11 @@ import RocketLaunchIcon from "@mui/icons-material/RocketLaunch";
 import LightbulbIcon from "@mui/icons-material/Lightbulb";
 import FavoriteIcon from "@mui/icons-material/Favorite";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ImageIcon from "@mui/icons-material/Image";
+import PaletteIcon from "@mui/icons-material/Palette";
+import LinkIcon from "@mui/icons-material/Link";
+import TextFieldsIcon from "@mui/icons-material/TextFields";
 
 // MUI Components
 import {
@@ -44,7 +49,7 @@ import {
   Tabs,
   Tab,
   Card,
-  CardContent,
+  CardMedia,
   Grid,
   CircularProgress,
   MenuItem,
@@ -53,9 +58,19 @@ import {
   Snackbar,
   Divider,
   Paper,
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Avatar,
+  Badge,
 } from "@mui/material";
 
-// --- Types correspondant au format attendu ---
+// --- Types ---
 interface CtaButton {
   label: string;
   href: string;
@@ -66,12 +81,12 @@ interface SlideData {
   id: string;
   title: string;
   subtitle: string;
-  image: string; // ✅ Renommé depuis imageUrl
-  imagePublicId?: string; // Pour Cloudinary
-  icon: string; // ✅ Renommé depuis iconName
-  overlayColor: string; // ✅ Renommé depuis colorTheme
-  ctas: CtaButton[]; // ✅ Nouveau champ
-  order: number; // ✅ Renommé depuis createdAt
+  image: string;
+  imagePublicId?: string;
+  icon: string;
+  overlayColor: string;
+  ctas: CtaButton[];
+  order: number;
 }
 
 // --- Mapping des Icônes ---
@@ -84,12 +99,10 @@ const ICON_MAP: Record<string, React.ReactElement> = {
   Play: <PlayArrow />,
 };
 
-
-
 // --- Options de couleur pour les boutons CTA ---
 const CTA_COLOR_OPTIONS = [
-  { value: "primary", label: "Primaire" },
-  { value: "outline", label: "Contour" },
+  { value: "primary", label: "Primaire (Plein)" },
+  { value: "outline", label: "Contour (Transparent)" },
   { value: "secondary", label: "Secondaire" },
 ];
 
@@ -111,7 +124,7 @@ const getOverlayGradient = (overlayColor: string): string => {
     "from-purple-900/80": "rgba(74, 20, 140, 0.8)",
     "from-black/70": "rgba(0, 0, 0, 0.7)",
   };
-  return colorMap[overlayColor] || "rgba(0, 0, 0, 0.7)";
+  return colorMap[overlayColor] || overlayColor || "rgba(0, 0, 0, 0.7)";
 };
 
 export default function SiteWeb() {
@@ -127,54 +140,46 @@ export default function SiteWeb() {
     type: "success" | "error";
   } | null>(null);
 
+  // État pour l'édition
+  const [selectedSlideId, setSelectedSlideId] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [slideToDelete, setSlideToDelete] = useState<SlideData | null>(null);
+
   // --- 1. FIREBASE: Charger les données en temps réel ---
   useEffect(() => {
-    console.log("🔄 Initialisation du listener Firebase...");
-
     const slidesRef = collection(db2, "website_slides");
-    const q = query(slidesRef, orderBy("order", "asc")); // ✅ Tri par "order"
+    const q = query(slidesRef, orderBy("order", "asc"));
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        console.log("📦 Données reçues:", snapshot.docs.length, "documents");
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedSlides = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          title: data.title || "Sans titre",
+          subtitle: data.subtitle || "",
+          image: data.image || "/imgcarousel/placeholder.png",
+          imagePublicId: data.imagePublicId || "",
+          icon: data.icon || "Sparkles",
+          overlayColor: data.overlayColor || "#616637",
+          ctas: data.ctas || [
+            { label: "En savoir plus", href: "#", color: "primary" },
+          ],
+          order: data.order || 0,
+        } as SlideData;
+      });
 
-        const fetchedSlides = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data();
-          console.log("📄 Document:", docSnap.id, data);
+      setSlides(fetchedSlides);
+      setLoading(false);
 
-          return {
-            id: docSnap.id,
-            title: data.title || "Sans titre",
-            subtitle: data.subtitle || "",
-            image: data.image || "/imgcarousel/placeholder.png", // ✅
-            imagePublicId: data.imagePublicId || "",
-            icon: data.icon || "Sparkles", // ✅
-            overlayColor: data.overlayColor || "#616637", // ✅
-            ctas: data.ctas || [
-              // ✅
-              { label: "En savoir plus", href: "#", color: "primary" },
-            ],
-            order: data.order || 0, // ✅
-          } as SlideData;
-        });
+      if (fetchedSlides.length > 0 && !selectedSlideId) {
+        setSelectedSlideId(fetchedSlides[0].id);
+      }
+    });
 
-        console.log("✅ Slides chargés:", fetchedSlides);
-        setSlides(fetchedSlides);
-        setLoading(false);
-      },
-      (error) => {
-        console.error("❌ Erreur Firebase:", error.message);
-        setToast({ msg: `Erreur: ${error.message}`, type: "error" });
-        setLoading(false);
-      },
-    );
+    return () => unsubscribe();
+  }, [selectedSlideId]); // Ajout dépendance safe
 
-    return () => {
-      console.log("🛑 Cleanup listener");
-      unsubscribe();
-    };
-  }, []);
+  const selectedSlide = slides.find((s) => s.id === selectedSlideId) || null;
 
   // --- Logique du Carousel ---
   const nextSlide = useCallback(() => {
@@ -193,12 +198,11 @@ export default function SiteWeb() {
     return () => clearInterval(timer);
   }, [nextSlide, tabValue, slides.length]);
 
-  // --- 2. CLOUDINARY: Upload ---
+  // --- 2. CLOUDINARY ---
   const handleImageUpload = async (id: string, file: File) => {
     setUploadingId(id);
     try {
       const compressedFile = await imageCompression(file, COMPRESSION_OPTIONS);
-
       const currentSlideData = slides.find((s) => s.id === id);
 
       const formData = new FormData();
@@ -216,95 +220,85 @@ export default function SiteWeb() {
       if (!res.ok) throw new Error(data.error);
 
       await updateDoc(doc(db2, "website_slides", id), {
-        image: data.imageUrl, // ✅ Champ renommé
+        image: data.imageUrl,
         imagePublicId: data.imagePublicId,
       });
 
       setToast({ msg: "Image mise à jour !", type: "success" });
     } catch (error: any) {
-      console.error(error);
-      setToast({ msg: error.message || "Erreur upload image", type: "error" });
+      setToast({ msg: error.message || "Erreur upload", type: "error" });
     } finally {
       setUploadingId(null);
     }
   };
 
-  // --- 3. ACTIONS FIREBASE ---
+  // --- 3. ACTIONS ---
   const handleAddSlide = async () => {
     try {
-      // Calculer le prochain order
       const maxOrder = slides.reduce((max, s) => Math.max(max, s.order), 0);
-
       const newSlide = {
         title: "Nouveau Slide",
         subtitle: "Description courte ici",
-        image: "/imgcarousel/placeholder.png", // ✅
-        icon: "Sparkles", // ✅
-        overlayColor: "from-primary/80", // ✅
-        ctas: [
-          // ✅
-          { label: "En savoir plus", href: "#", color: "primary" },
-          { label: "Contact", href: "/contact", color: "outline" },
-        ],
-        order: maxOrder + 1, // ✅
+        image: "/imgcarousel/placeholder.png",
+        icon: "Sparkles",
+        overlayColor: "#1976d2",
+        ctas: [{ label: "En savoir plus", href: "#", color: "primary" }],
+        order: maxOrder + 1,
       };
-
       const docRef = await addDoc(collection(db2, "website_slides"), newSlide);
-      console.log("✅ Slide créé avec ID:", docRef.id);
+      setSelectedSlideId(docRef.id);
       setToast({ msg: "Slide ajouté", type: "success" });
     } catch (e: any) {
-      console.error("Erreur ajout:", e);
-      setToast({ msg: e.message || "Erreur ajout", type: "error" });
+      setToast({ msg: e.message, type: "error" });
     }
   };
 
-  const handleDelete = async (id: string, publicId?: string) => {
-    if (!confirm("Voulez-vous vraiment supprimer ce slide ?")) return;
+  const confirmDelete = (slide: SlideData) => {
+    setSlideToDelete(slide);
+    setDeleteDialogOpen(true);
+  };
 
+  const handleDelete = async () => {
+    if (!slideToDelete) return;
     try {
-      await deleteDoc(doc(db2, "website_slides", id));
-
-      if (publicId) {
+      await deleteDoc(doc(db2, "website_slides", slideToDelete.id));
+      if (slideToDelete.imagePublicId) {
         fetch("/api/cloudinary/deleteweb", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ publicId }),
+          body: JSON.stringify({ publicId: slideToDelete.imagePublicId }),
         }).catch(console.error);
       }
-
       setToast({ msg: "Slide supprimé", type: "success" });
-      if (currentSlide >= slides.length - 1) setCurrentSlide(0);
+      const remaining = slides.filter((s) => s.id !== slideToDelete.id);
+      setSelectedSlideId(remaining.length > 0 ? remaining[0].id : null);
     } catch (e: any) {
-      setToast({ msg: e.message || "Erreur suppression", type: "error" });
+      setToast({ msg: e.message, type: "error" });
+    } finally {
+      setDeleteDialogOpen(false);
+      setSlideToDelete(null);
     }
   };
 
-  // --- Modification locale des champs simples ---
-  const handleLocalChange = (
-    id: string,
-    field: keyof SlideData,
-    value: any,
-  ) => {
+  const handleLocalChange = (id: string, field: keyof SlideData, value: any) => {
     setSlides((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, [field]: value } : s)),
+      prev.map((s) => (s.id === id ? { ...s, [field]: value } : s))
     );
   };
 
-  // --- Modification des CTAs ---
   const handleCtaChange = (
     slideId: string,
     ctaIndex: number,
     field: keyof CtaButton,
-    value: string,
+    value: string
   ) => {
     setSlides((prev) =>
       prev.map((slide) => {
         if (slide.id !== slideId) return slide;
-
         const newCtas = [...slide.ctas];
         newCtas[ctaIndex] = { ...newCtas[ctaIndex], [field]: value };
         return { ...slide, ctas: newCtas };
-      }),
+      })
     );
   };
 
@@ -316,10 +310,10 @@ export default function SiteWeb() {
           ...slide,
           ctas: [
             ...slide.ctas,
-            { label: "Nouveau bouton", href: "#", color: "outline" as const },
+            { label: "Bouton", href: "#", color: "outline" as const },
           ],
         };
-      }),
+      })
     );
   };
 
@@ -331,83 +325,53 @@ export default function SiteWeb() {
           ...slide,
           ctas: slide.ctas.filter((_, idx) => idx !== ctaIndex),
         };
-      }),
+      })
     );
   };
 
-  // --- Sauvegarde Firebase ---
   const handleSaveSlide = async (id: string) => {
     const slideToSave = slides.find((s) => s.id === id);
     if (!slideToSave) return;
-
     setSavingId(id);
     try {
       await updateDoc(doc(db2, "website_slides", id), {
         title: slideToSave.title,
         subtitle: slideToSave.subtitle,
-        icon: slideToSave.icon, // ✅
-        overlayColor: slideToSave.overlayColor, // ✅
-        ctas: slideToSave.ctas, // ✅
-        order: slideToSave.order, // ✅
+        icon: slideToSave.icon,
+        overlayColor: slideToSave.overlayColor,
+        ctas: slideToSave.ctas,
+        order: slideToSave.order,
       });
-      setToast({ msg: "Modifications enregistrées", type: "success" });
+      setToast({ msg: "Sauvegardé avec succès", type: "success" });
     } catch (e: any) {
-      setToast({ msg: e.message || "Erreur sauvegarde", type: "error" });
+      setToast({ msg: e.message, type: "error" });
     } finally {
       setSavingId(null);
     }
   };
 
-  // --- LOADING STATE ---
   if (loading) {
     return (
-      <Box
-        sx={{
-          height: "100vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexDirection: "column",
-          gap: 2,
-        }}
-      >
+      <Box sx={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <CircularProgress />
-        <Typography>Chargement des slides...</Typography>
       </Box>
     );
   }
 
   return (
-    <Box sx={{ width: "100%", minHeight: "100vh", bgcolor: "#f5f5f5" }}>
-      {/* --- Tabs --- */}
-      <Box
-        sx={{
-          borderBottom: 1,
-          borderColor: "divider",
-          bgcolor: "white",
-          position: "sticky",
-          top: 0,
-          zIndex: 1000,
-        }}
-      >
+    <Box sx={{ width: "100%", minHeight: "100vh",  }}>
+      {/* TABS HEADER */}
+      <Box sx={{ borderBottom: 1, borderColor: "divider", bgcolor: "white", position: "sticky", top: 0, zIndex: 1000 }}>
         <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)} centered>
           <Tab icon={<PreviewIcon />} label="Aperçu du site" />
-          <Tab icon={<EditIcon />} label="Modifier le contenu" />
+          <Tab icon={<EditIcon />} label="Éditeur Visuel" />
         </Tabs>
       </Box>
 
-      {/* --- APERÇU --- */}
+      {/* --- VUE APERÇU (Identique à avant) --- */}
       {tabValue === 0 && (
-        <Box
-          component="section"
-          sx={{
-            position: "relative",
-            height: { xs: 600, md: 700 },
-            overflow: "hidden",
-            bgcolor: "black",
-          }}
-        >
-          {slides.length > 0 ? (
+        <Box component="section" sx={{ position: "relative", height: { xs: 600, md: 700 }, overflow: "hidden", bgcolor: "black" }}>
+           {slides.length > 0 ? (
             slides.map((slide, index) => (
               <Box
                 key={slide.id}
@@ -423,85 +387,39 @@ export default function SiteWeb() {
                   sx={{
                     position: "absolute",
                     inset: 0,
-                    backgroundImage: `url(${slide.image})`, // ✅
+                    backgroundImage: `url(${slide.image})`,
                     backgroundSize: "cover",
                     backgroundPosition: "center",
                     "&::before": {
                       content: '""',
                       position: "absolute",
                       inset: 0,
-                      background: `linear-gradient(to right, ${getOverlayGradient(slide.overlayColor)} 0%, rgba(0,0,0,0.3) 100%)`, // ✅
+                      background: `linear-gradient(to right, ${getOverlayGradient(slide.overlayColor)} 0%, rgba(0,0,0,0.3) 100%)`,
                     },
                   }}
                 />
 
-                <Container
-                  sx={{
-                    position: "relative",
-                    height: "100%",
-                    display: "flex",
-                    alignItems: "center",
-                  }}
-                >
+                <Container sx={{ position: "relative", height: "100%", display: "flex", alignItems: "center" }}>
                   <Box sx={{ maxWidth: 650, color: "white" }}>
-                    {/* Icône */}
-                    <Box
-                      sx={{
-                        width: 64,
-                        height: 64,
-                        borderRadius: "50%",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        bgcolor: "rgba(255,255,255,0.2)",
-                        backdropFilter: "blur(10px)",
-                        mb: 3,
-                      }}
-                    >
-                      {React.cloneElement(
-                        ICON_MAP[slide.icon] || <AutoAwesome />,
-                        { sx: { fontSize: 32, color: "white" } },
-                      )}
+                    <Box sx={{ width: 64, height: 64, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "rgba(255,255,255,0.2)", backdropFilter: "blur(10px)", mb: 3 }}>
+                      {React.cloneElement(ICON_MAP[slide.icon] || <AutoAwesome />, { sx: { fontSize: 32, color: "white" } })}
                     </Box>
-
-                    {/* Titre */}
-                    <Typography
-                      variant="h2"
-                      sx={{
-                        fontWeight: "bold",
-                        mb: 2,
-                        fontSize: { xs: "2rem", md: "3.5rem" },
-                      }}
-                    >
+                    <Typography variant="h2" sx={{ fontWeight: "bold", mb: 2, fontSize: { xs: "2rem", md: "3.5rem" } }}>
                       {slide.title}
                     </Typography>
-
-                    {/* Sous-titre */}
                     <Typography variant="h6" sx={{ mb: 4, opacity: 0.9 }}>
                       {slide.subtitle}
                     </Typography>
-
-                    {/* CTAs dynamiques ✅ */}
                     <Stack direction="row" spacing={2} flexWrap="wrap">
                       {slide.ctas.map((cta, ctaIdx) => (
                         <Button
                           key={ctaIdx}
-                          variant={
-                            cta.color === "outline" ? "outlined" : "contained"
-                          }
-                          color={
-                            cta.color === "outline" ? "inherit" : "primary"
-                          }
+                          variant={cta.color === "outline" ? "outlined" : "contained"}
+                          color={cta.color === "outline" ? "inherit" : "primary"}
                           size="large"
-                          href={cta.href}
                           sx={{
-                            borderRadius: 50,
-                            px: 4,
-                            ...(cta.color === "outline" && {
-                              borderColor: "white",
-                              color: "white",
-                              "&:hover": { bgcolor: "rgba(255,255,255,0.1)" },
-                            }),
+                            borderRadius: 50, px: 4,
+                            ...(cta.color === "outline" && { borderColor: "white", color: "white" }),
                           }}
                         >
                           {cta.label}
@@ -513,449 +431,364 @@ export default function SiteWeb() {
               </Box>
             ))
           ) : (
-            <Box
-              sx={{
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                height: "100%",
-                color: "white",
-                flexDirection: "column",
-                gap: 2,
-              }}
-            >
-              <Typography>Aucun slide trouvé.</Typography>
-              <Button
-                variant="contained"
-                onClick={() => setTabValue(1)}
-                startIcon={<AddIcon />}
-              >
-                Créer un slide
-              </Button>
-            </Box>
+             <Box sx={{ display: "flex", height: "100%", alignItems: "center", justifyContent: "center", color: "white" }}>
+               <Typography>Aucun slide.</Typography>
+             </Box>
           )}
-
           {slides.length > 1 && (
             <>
-              <IconButton
-                onClick={prevSlide}
-                sx={{
-                  position: "absolute",
-                  left: 16,
-                  top: "50%",
-                  color: "white",
-                  bgcolor: "rgba(0,0,0,0.3)",
-                }}
-              >
-                <ChevronLeft fontSize="large" />
-              </IconButton>
-              <IconButton
-                onClick={nextSlide}
-                sx={{
-                  position: "absolute",
-                  right: 16,
-                  top: "50%",
-                  color: "white",
-                  bgcolor: "rgba(0,0,0,0.3)",
-                }}
-              >
-                <ChevronRight fontSize="large" />
-              </IconButton>
-
-              {/* Indicateurs */}
-              <Box
-                sx={{
-                  position: "absolute",
-                  bottom: 20,
-                  left: "50%",
-                  transform: "translateX(-50%)",
-                  display: "flex",
-                  gap: 1,
-                }}
-              >
-                {slides.map((_, idx) => (
-                  <Box
-                    key={idx}
-                    onClick={() => setCurrentSlide(idx)}
-                    sx={{
-                      width: 12,
-                      height: 12,
-                      borderRadius: "50%",
-                      bgcolor:
-                        idx === currentSlide
-                          ? "white"
-                          : "rgba(255,255,255,0.4)",
-                      cursor: "pointer",
-                      transition: "all 0.3s",
-                    }}
-                  />
-                ))}
-              </Box>
+              <IconButton onClick={prevSlide} sx={{ position: "absolute", left: 16, top: "50%", color: "white" }}><ChevronLeft fontSize="large" /></IconButton>
+              <IconButton onClick={nextSlide} sx={{ position: "absolute", right: 16, top: "50%", color: "white" }}><ChevronRight fontSize="large" /></IconButton>
             </>
           )}
         </Box>
       )}
 
-      {/* --- ÉDITION --- */}
+      {/* --- NOUVELLE VUE ÉDITEUR (Split Screen) --- */}
       {tabValue === 1 && (
-        <Container sx={{ py: 6 }}>
-          <Alert severity="info" sx={{ mb: 3 }}>
-            📊 {slides.length} slide(s) chargé(s) depuis Firebase
-          </Alert>
+        <Box sx={{ display: "flex", flexDirection: "column", height: "calc(100vh - 72px)" }}>
+          
+          {/* 1. TOP BAR: SÉLECTEUR DE SLIDES (Horizontal) */}
+          <Paper 
+            elevation={1} 
+            sx={{ 
+              p: 2, 
+              display: "flex", 
+              alignItems: "center", 
+              gap: 2, 
+              overflowX: "auto",
+              // bgcolor: "red",
+              zIndex: 10,
+              borderRadius:0
+            }}
+          >
+            <Button variant="contained" onClick={handleAddSlide} startIcon={<AddIcon />} sx={{ flexShrink: 0 }}>
+              Nouveau
+            </Button>
+            <Divider orientation="vertical" flexItem />
+            <Stack direction="row" spacing={2} alignItems="center">
+              {slides.map((slide) => (
+                <Box
+                  key={slide.id}
+                  onClick={() => setSelectedSlideId(slide.id)}
+                  sx={{
+                    position: "relative",
+                    cursor: "pointer",
+                    border: selectedSlideId === slide.id ? "3px solid #1976d2" : "2px solid #616637",
+                    borderRadius: 1,
+                    opacity: selectedSlideId === slide.id ? 1 : 0.7,
+                    transition: "all 0.2s",
+                    "&:hover": { opacity: 1, transform: "scale(1.05)" }
+                  }}
+                >
+                  <Avatar 
+                    src={slide.image} 
+                    variant="rounded" 
+                    sx={{ width: 80, height: 50 }}
+                  >
+                    <ImageIcon />
+                  </Avatar>
+                  <Box 
+                    sx={{ 
+                      position: "absolute", 
+                      top: -6, 
+                      right: -6, 
+                      bgcolor: selectedSlideId === slide.id ? "red" : "#616637",
+                      color: "white", 
+                      borderRadius: "50%", 
+                      width: 20, 
+                      height: 20, 
+                      fontSize: 12, 
+                      display: "flex", 
+                      alignItems: "center", 
+                      justifyContent: "center",
+                      fontWeight: "bold"
+                    }}
+                  >
+                    {slide.order}
+                  </Box>
+                </Box>
+              ))}
+            </Stack>
+          </Paper>
 
-          <Grid container spacing={3}>
-            {slides.map((slide) => (
-              <Grid item xs={12} key={slide.id}>
-                <Card sx={{ borderRadius: 4, boxShadow: 3 }}>
-                  <Grid container>
-                    {/* Image à gauche */}
-                    <Grid item xs={12} md={5}>
-                      <Box
-                        sx={{
-                          position: "relative",
-                          height: { xs: 250, md: "100%" },
-                          minHeight: 300,
-                          bgcolor: "#eee",
-                        }}
-                      >
-                        <img
-                          src={slide.image}
-                          alt="preview"
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                            opacity: uploadingId === slide.id ? 0.5 : 1,
-                          }}
+          {/* 2. MAIN AREA: GRID SPLIT */}
+          <Box sx={{ flex: 1, overflow: "hidden", p: 3 }} bgcolor={"secondary"}>
+            {selectedSlide ? (
+              <Grid container spacing={4} sx={{ height: "100%" }}>
+                
+                {/* COLONNE GAUCHE: PRÉVISUALISATION FIXE */}
+                <Grid item xs={12} md={7} lg={8} sx={{ height: "100%", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+                  <Typography variant="h6" gutterBottom fontWeight={600} color="text.secondary">
+                    Prévisualisation en direct
+                  </Typography>
+                  <Paper 
+                    elevation={4} 
+                    sx={{ 
+                      flex: 1, 
+                      borderRadius: 4, 
+                      overflow: "hidden", 
+                      position: "relative", 
+                      border: "4px solid white" 
+                    }}
+                  >
+                     <Box sx={{ position: "absolute", inset: 0 }}>
+                        <img 
+                          src={selectedSlide.image} 
+                          alt="bg" 
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }} 
                         />
-
-                        {uploadingId === slide.id && (
-                          <Box
-                            sx={{
-                              position: "absolute",
-                              inset: 0,
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                            }}
-                          >
-                            <CircularProgress />
-                          </Box>
-                        )}
-
                         <Box
                           sx={{
                             position: "absolute",
-                            top: 8,
-                            right: 8,
-                            display: "flex",
-                            gap: 1,
+                            inset: 0,
+                            background: `linear-gradient(to right, ${getOverlayGradient(selectedSlide.overlayColor)} 0%, transparent 100%)`,
                           }}
-                        >
-                          <IconButton
-                            component="label"
-                            sx={{
-                              bgcolor: "white",
-                              "&:hover": { bgcolor: "#eee" },
-                            }}
-                            disabled={!!uploadingId}
-                          >
-                            <input
-                              hidden
-                              accept="image/*"
-                              type="file"
-                              onChange={(e) =>
-                                e.target.files?.[0] &&
-                                handleImageUpload(slide.id, e.target.files[0])
-                              }
-                            />
-                            <CloudUploadIcon color="primary" />
-                          </IconButton>
-
-                          <IconButton
-                            onClick={() =>
-                              handleDelete(slide.id, slide.imagePublicId)
-                            }
-                            sx={{
-                              bgcolor: "white",
-                              "&:hover": { bgcolor: "#fee" },
-                            }}
-                          >
-                            <Delete color="error" />
-                          </IconButton>
-                        </Box>
-
-                        {/* Order badge */}
-                        <Typography
-                          sx={{
-                            position: "absolute",
-                            bottom: 8,
-                            left: 8,
-                            bgcolor: "primary.main",
-                            color: "white",
-                            px: 2,
-                            py: 0.5,
-                            borderRadius: 2,
-                            fontWeight: "bold",
-                          }}
-                        >
-                          #{slide.order}
-                        </Typography>
-                      </Box>
-                    </Grid>
-
-                    {/* Formulaire à droite */}
-                    <Grid item xs={12} md={7}>
-                      <CardContent
-                        sx={{
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 2,
-                          p: 3,
-                        }}
-                      >
-                        {/* Titre & Sous-titre */}
-                        <TextField
-                          label="Titre"
-                          fullWidth
-                          variant="outlined"
-                          value={slide.title}
-                          onChange={(e) =>
-                            handleLocalChange(slide.id, "title", e.target.value)
-                          }
                         />
-                        <TextField
-                          label="Sous-titre"
-                          fullWidth
-                          multiline
-                          rows={2}
-                          variant="outlined"
-                          value={slide.subtitle}
-                          onChange={(e) =>
-                            handleLocalChange(
-                              slide.id,
-                              "subtitle",
-                              e.target.value,
-                            )
-                          }
-                        />
+                     </Box>
 
-                        {/* Icône, Overlay, Order */}
-                        <Stack direction="row" spacing={2}>
-                          <TextField
-                            select
-                            label="Icône"
-                            value={slide.icon}
-                            onChange={(e) =>
-                              handleLocalChange(
-                                slide.id,
-                                "icon",
-                                e.target.value,
-                              )
-                            }
-                            fullWidth
-                            size="small"
-                          >
-                            {Object.keys(ICON_MAP).map((key) => (
-                              <MenuItem key={key} value={key}>
-                                <Stack
-                                  direction="row"
-                                  alignItems="center"
-                                  gap={1}
-                                >
-                                  {React.cloneElement(ICON_MAP[key], {
-                                    fontSize: "small",
-                                  })}
-                                  {key}
-                                </Stack>
-                              </MenuItem>
+                     {/* Contenu simulé */}
+                     <Box sx={{ position: "absolute", inset: 0, p: 6, display: "flex", alignItems: "center", color: "white" }}>
+                        <Box sx={{ maxWidth: "80%" }}>
+                          <Box sx={{ width: 48, height: 48, borderRadius: "50%", bgcolor: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", mb: 2 }}>
+                            {React.cloneElement(ICON_MAP[selectedSlide.icon] || <AutoAwesome />, { fontSize: "small" })}
+                          </Box>
+                          <Typography variant="h4" fontWeight="bold" gutterBottom>{selectedSlide.title}</Typography>
+                          <Typography variant="h6" sx={{ opacity: 0.9, mb: 3 }}>{selectedSlide.subtitle}</Typography>
+                          <Stack direction="row" spacing={2}>
+                            {selectedSlide.ctas.map((cta, i) => (
+                              <Button 
+                                key={i}
+                                variant={cta.color === "outline" ? "outlined" : "contained"}
+                                color={cta.color === "outline" ? "inherit" : "primary"}
+                                sx={cta.color === "outline" ? { borderColor: "white", color: "white" } : {}}
+                              >
+                                {cta.label}
+                              </Button>
                             ))}
-                          </TextField>
+                          </Stack>
+                        </Box>
+                     </Box>
 
+                     {/* Bouton Upload Flottant */}
+                     <Box sx={{ position: "absolute", top: 16, right: 16 }}>
+                        <Button
+                          component="label"
+                          variant="contained"
+                          color="info"
+                          startIcon={uploadingId ? <CircularProgress size={20} color="inherit" /> : <CloudUploadIcon />}
+                          disabled={!!uploadingId}
+                          sx={{ borderRadius: 4 }}
+                        >
+                          Changer l'image
+                          <input hidden accept="image/*" type="file" onChange={(e) => e.target.files?.[0] && handleImageUpload(selectedSlide.id, e.target.files[0])} />
+                        </Button>
+                     </Box>
+                  </Paper>
+                </Grid>
+
+                {/* COLONNE DROITE: ÉDITEUR ACCORDÉONS */}
+                <Grid item xs={12} md={5} lg={4} sx={{ height: "100%", overflowY: "auto", pr: 1 }} >
+                  <Stack spacing={2}>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <Typography variant="h6" fontWeight={600}>Propriétés</Typography>
+                      <IconButton color="error" onClick={() => confirmDelete(selectedSlide)}>
+                        <Delete />
+                      </IconButton>
+                    </Box>
+
+                    {/* 1. TEXTE */}
+                    <Accordion defaultExpanded elevation={0} sx={{ border: "1px solid #e0e0e0", borderRadius: "8px !important" }}>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <TextFieldsIcon color="primary" />
+                          <Typography fontWeight={500}>Textes</Typography>
+                        </Stack>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Stack spacing={2}>
                           <TextField
-                            type="color"
-                            label="Couleur Overlay"
-                            value={slide.overlayColor}
-                            onChange={(e) =>
-                              handleLocalChange(
-                                slide.id,
-                                "overlayColor",
-                                e.target.value,
-                              )
-                            }
+                            label="Titre Principal"
                             fullWidth
-                            size="small"
-                            InputLabelProps={{ shrink: true }}
-                            sx={{
-                              "& input": {
-                                height: 22,
-                                cursor: "pointer",
-                                padding: 1,
-                              },
-                            }}
+                            multiline
+                            rows={2}
+                            value={selectedSlide.title}
+                            onChange={(e) => handleLocalChange(selectedSlide.id, "title", e.target.value)}
                           />
-
                           <TextField
-                            type="number"
-                            label="Ordre"
-                            value={slide.order}
-                            onChange={(e) =>
-                              handleLocalChange(
-                                slide.id,
-                                "order",
-                                parseInt(e.target.value) || 0,
-                              )
-                            }
-                            size="small"
-                            // sx={{ width: 100 }}
+                            label="Sous-titre"
+                            fullWidth
+                            multiline
+                            rows={3}
+                            value={selectedSlide.subtitle}
+                            onChange={(e) => handleLocalChange(selectedSlide.id, "subtitle", e.target.value)}
                           />
                         </Stack>
+                      </AccordionDetails>
+                    </Accordion>
 
-                        <Divider sx={{ my: 1 }} />
-
-                        {/* CTAs */}
-                        <Typography variant="subtitle2" fontWeight="bold">
-                          Boutons d'action (CTAs)
-                        </Typography>
-
-                        {slide.ctas.map((cta, ctaIdx) => (
-                          <Paper key={ctaIdx} variant="outlined" sx={{ p: 2 }}>
-                            <Stack
-                              direction="row"
-                              spacing={2}
-                              alignItems="center"
+                    {/* 2. STYLE */}
+                    <Accordion elevation={0} sx={{ border: "1px solid #e0e0e0", borderRadius: "8px !important" }}>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <PaletteIcon color="secondary" />
+                          <Typography fontWeight={500}>Apparence & Ordre</Typography>
+                        </Stack>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Stack spacing={2}>
+                           <TextField
+                              select
+                              label="Icône décorative"
+                              value={selectedSlide.icon}
+                              onChange={(e) => handleLocalChange(selectedSlide.id, "icon", e.target.value)}
+                              fullWidth
                             >
+                              {Object.keys(ICON_MAP).map((key) => (
+                                <MenuItem key={key} value={key}>
+                                  <Stack direction="row" alignItems="center" gap={1}>
+                                    {React.cloneElement(ICON_MAP[key], { fontSize: "small" })}
+                                    {key}
+                                  </Stack>
+                                </MenuItem>
+                              ))}
+                            </TextField>
+
+                            <Stack direction="row" spacing={2} alignItems="center">
+                              <Box sx={{ width: 40, height: 40, borderRadius: 1, bgcolor: selectedSlide.overlayColor, border: "1px solid #ccc" }} />
                               <TextField
-                                label="Label"
-                                value={cta.label}
-                                onChange={(e) =>
-                                  handleCtaChange(
-                                    slide.id,
-                                    ctaIdx,
-                                    "label",
-                                    e.target.value,
-                                  )
-                                }
-                                size="small"
-                                sx={{ flex: 1 }}
+                                label="Couleur du dégradé"
+                                type="color"
+                                value={selectedSlide.overlayColor}
+                                onChange={(e) => handleLocalChange(selectedSlide.id, "overlayColor", e.target.value)}
+                                fullWidth
+                                sx={{ "& input": { height: 40, cursor: "pointer" } }}
                               />
-                              <TextField
-                                label="Lien (href)"
-                                value={cta.href}
-                                onChange={(e) =>
-                                  handleCtaChange(
-                                    slide.id,
-                                    ctaIdx,
-                                    "href",
-                                    e.target.value,
-                                  )
-                                }
-                                size="small"
-                                sx={{ flex: 1 }}
-                              />
-                              <TextField
-                                select
-                                label="Style"
-                                value={cta.color}
-                                onChange={(e) =>
-                                  handleCtaChange(
-                                    slide.id,
-                                    ctaIdx,
-                                    "color",
-                                    e.target.value,
-                                  )
-                                }
-                                size="small"
-                                sx={{ width: 120 }}
-                              >
-                                {CTA_COLOR_OPTIONS.map((opt) => (
-                                  <MenuItem key={opt.value} value={opt.value}>
-                                    {opt.label}
-                                  </MenuItem>
-                                ))}
-                              </TextField>
-                              <IconButton
-                                color="error"
-                                onClick={() =>
-                                  handleRemoveCta(slide.id, ctaIdx)
-                                }
-                                disabled={slide.ctas.length <= 1}
-                              >
-                                <DeleteOutlineIcon />
-                              </IconButton>
                             </Stack>
-                          </Paper>
-                        ))}
 
-                        <Button
-                          variant="outlined"
-                          startIcon={<AddIcon />}
-                          onClick={() => handleAddCta(slide.id)}
-                          size="small"
-                        >
-                          Ajouter un bouton
-                        </Button>
+                            <TextField
+                              label="Ordre d'affichage"
+                              type="number"
+                              value={selectedSlide.order}
+                              onChange={(e) => handleLocalChange(selectedSlide.id, "order", parseInt(e.target.value) || 0)}
+                              fullWidth
+                            />
+                        </Stack>
+                      </AccordionDetails>
+                    </Accordion>
 
-                        <Divider sx={{ my: 1 }} />
+                    {/* 3. CTA (Boutons d'action) - NOUVEAU DESIGN */}
+                    <Accordion defaultExpanded elevation={0} sx={{ border: "1px solid #e0e0e0", borderRadius: "8px !important" }}>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <LinkIcon color="action" />
+                          <Badge badgeContent={selectedSlide.ctas.length} color="primary">
+                            <Typography fontWeight={500} sx={{ mr: 1 }}>Boutons d'action</Typography>
+                          </Badge>
+                        </Stack>
+                      </AccordionSummary>
+                      <AccordionDetails sx={{ bgcolor: "#fafafa" }}>
+                        <Stack spacing={2}>
+                          {selectedSlide.ctas.map((cta, i) => (
+                            <Paper key={i} elevation={1} sx={{ p: 2, borderLeft: "4px solid #1976d2" }}>
+                                <Grid container spacing={2}>
+                                  <Grid item xs={12} display="flex" justifyContent="space-between">
+                                     <Typography variant="caption" fontWeight="bold" color="primary">BOUTON #{i + 1}</Typography>
+                                     <IconButton size="small" color="error" onClick={() => handleRemoveCta(selectedSlide.id, i)} disabled={selectedSlide.ctas.length <= 1}>
+                                        <DeleteOutlineIcon fontSize="small" />
+                                     </IconButton>
+                                  </Grid>
+                                  <Grid item xs={6}>
+                                    <TextField
+                                      label="Texte"
+                                      value={cta.label}
+                                      onChange={(e) => handleCtaChange(selectedSlide.id, i, "label", e.target.value)}
+                                      size="small"
+                                      fullWidth
+                                    />
+                                  </Grid>
+                                  <Grid item xs={6}>
+                                    <TextField
+                                      select
+                                      label="Style"
+                                      value={cta.color}
+                                      onChange={(e) => handleCtaChange(selectedSlide.id, i, "color", e.target.value)}
+                                      size="small"
+                                      fullWidth
+                                    >
+                                      {CTA_COLOR_OPTIONS.map((opt) => (
+                                        <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+                                      ))}
+                                    </TextField>
+                                  </Grid>
+                                  <Grid item xs={12}>
+                                    <TextField
+                                      label="Lien URL"
+                                      value={cta.href}
+                                      onChange={(e) => handleCtaChange(selectedSlide.id, i, "href", e.target.value)}
+                                      size="small"
+                                      fullWidth
+                                      InputProps={{ startAdornment: <LinkIcon fontSize="small" sx={{ mr: 1, opacity: 0.5 }} /> }}
+                                    />
+                                  </Grid>
+                                </Grid>
+                            </Paper>
+                          ))}
+                          
+                          <Button 
+                            variant="outlined" 
+                            startIcon={<AddIcon />} 
+                            onClick={() => handleAddCta(selectedSlide.id)}
+                            fullWidth
+                            sx={{ borderStyle: "dashed" }}
+                          >
+                            Ajouter un bouton
+                          </Button>
+                        </Stack>
+                      </AccordionDetails>
+                    </Accordion>
 
-                        {/* Bouton Sauvegarder */}
-                        <Button
-                          variant="contained"
-                          color="success"
-                          startIcon={
-                            savingId === slide.id ? (
-                              <CircularProgress size={20} color="inherit" />
-                            ) : (
-                              <SaveIcon />
-                            )
-                          }
-                          onClick={() => handleSaveSlide(slide.id)}
-                          disabled={savingId === slide.id}
-                          fullWidth
-                          size="large"
-                        >
-                          Enregistrer les modifications
-                        </Button>
-                      </CardContent>
-                    </Grid>
-                  </Grid>
-                </Card>
+                    <Box sx={{ height: 20 }} /> {/* Spacer */}
+
+                    <Button
+                      variant="contained"
+                      color="success"
+                      size="large"
+                      startIcon={savingId === selectedSlide.id ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
+                      onClick={() => handleSaveSlide(selectedSlide.id)}
+                      disabled={savingId === selectedSlide.id}
+                      fullWidth
+                      sx={{ py: 1.5, borderRadius: 2 }}
+                    >
+                      Enregistrer le slide
+                    </Button>
+                  </Stack>
+                </Grid>
               </Grid>
-            ))}
-
-            {/* Bouton Ajouter */}
-            <Grid item xs={12}>
-              <Button
-                fullWidth
-                onClick={handleAddSlide}
-                sx={{
-                  height: 120,
-                  border: "2px dashed #ccc",
-                  borderRadius: 4,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 1,
-                  color: "#666",
-                  "&:hover": { bgcolor: "#e3e3e3", borderColor: "#999" },
-                }}
-              >
-                <AddIcon sx={{ fontSize: 48 }} />
-                <Typography>Ajouter un nouveau slide</Typography>
-              </Button>
-            </Grid>
-          </Grid>
-        </Container>
+            ) : (
+              <Box sx={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", opacity: 0.5 }}>
+                 <ImageIcon sx={{ fontSize: 80, mb: 2 }} />
+                 <Typography variant="h5">Sélectionnez un slide en haut pour commencer</Typography>
+              </Box>
+            )}
+          </Box>
+        </Box>
       )}
 
-      <Snackbar
-        open={!!toast}
-        autoHideDuration={4000}
-        onClose={() => setToast(null)}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      >
-        <Alert severity={toast?.type || "info"} variant="filled">
-          {toast?.msg}
-        </Alert>
+      {/* Dialog Suppression */}
+      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+        <DialogTitle>Supprimer le slide ?</DialogTitle>
+        <DialogContent>
+          <Typography>Voulez-vous vraiment supprimer "{slideToDelete?.title}" ?</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)}>Annuler</Button>
+          <Button onClick={handleDelete} color="error" variant="contained">Supprimer</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar open={!!toast} autoHideDuration={4000} onClose={() => setToast(null)}>
+        <Alert severity={toast?.type || "info"}>{toast?.msg}</Alert>
       </Snackbar>
     </Box>
   );
