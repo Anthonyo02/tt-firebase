@@ -71,7 +71,6 @@ const Transition = forwardRef(function Transition(
   return <Slide direction="up" ref={ref} {...props} />;
 });
 
-// Options de compression (rapide et léger pour accélérer l'upload final)
 const COMPRESSION_OPTIONS = {
   maxSizeMB: 0.2,
   maxWidthOrHeight: 1024,
@@ -151,7 +150,7 @@ async function getCroppedImgBlob(
 }
 
 // ============================================
-// CLOUDINARY
+// CLOUDINARY - AVEC OVERWRITE
 // ============================================
 
 type CloudinaryUploadResult = {
@@ -159,27 +158,47 @@ type CloudinaryUploadResult = {
   imagePublicId: string;
 };
 
-const uploadToCloudinary = async (blob: Blob): Promise<CloudinaryUploadResult> => {
+/**
+ * Upload vers Cloudinary via API Route (signed)
+ * Si existingPublicId est fourni, l'image sera écrasée (overwrite)
+ */
+const uploadToCloudinary = async (
+  blob: Blob, 
+  existingPublicId?: string
+): Promise<CloudinaryUploadResult> => {
   try {
     const formData = new FormData();
     formData.append("file", blob, "image.webp");
-    formData.append("upload_preset", "not_signed");
-    formData.append("folder", "materiels");
+    
+    // 🔄 Si on a un publicId existant, on l'envoie pour overwrite
+    if (existingPublicId) {
+      formData.append("publicId", existingPublicId);
+      console.log("🔄 Mode OVERWRITE - publicId:", existingPublicId);
+    } else {
+      console.log("🆕 Mode CRÉATION - nouvelle image");
+    }
 
-    const cloudName = "dmvsypdvu";
-    const url = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`;
-
-    const response = await fetch(url, { method: "POST", body: formData });
+    const response = await fetch("/api/cloudinary/upload", {
+      method: "POST",
+      body: formData,
+    });
 
     if (!response.ok) {
-      throw new Error("Échec de l'upload");
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Échec de l'upload");
     }
 
     const data = await response.json();
     
+    console.log("✅ Upload terminé:", {
+      url: data.imageUrl,
+      publicId: data.imagePublicId,
+      wasOverwrite: !!existingPublicId
+    });
+    
     return {
-      imageUrl: data.secure_url,
-      imagePublicId: data.public_id,
+      imageUrl: data.imageUrl,
+      imagePublicId: data.imagePublicId,
     };
   } catch (error: any) {
     console.error("❌ Erreur Cloudinary:", error.message);
@@ -187,6 +206,9 @@ const uploadToCloudinary = async (blob: Blob): Promise<CloudinaryUploadResult> =
   }
 };
 
+/**
+ * Suppression d'une image Cloudinary (seulement si vraiment nécessaire)
+ */
 const deleteFromCloudinary = async (publicId: string): Promise<void> => {
   if (!publicId) return;
   console.log("🗑️ Suppression Cloudinary:", publicId);
@@ -213,8 +235,6 @@ const MaterielFormModal: React.FC<Props> = ({
   onClose,
   onSaved,
 }) => {
-  // On récupère fetchMateriels en plus pour forcer un refresh si besoin, 
-  // bien que add/update le fassent déjà.
   const { addMateriel, updateMateriel, categorie, references, materiels } = useData();
 
   // FORM
@@ -473,7 +493,7 @@ const MaterielFormModal: React.FC<Props> = ({
   const handleClickCamera = () => cameraInputRef.current?.click();
 
   // --------------------------------------------
-  // SAVE
+  // SAVE - AVEC OVERWRITE
   // --------------------------------------------
   const handleSave = async () => {
     if (!form.nom) return;
@@ -482,27 +502,35 @@ const MaterielFormModal: React.FC<Props> = ({
     try {
       let finalImageUrl = form.imageUrl || "";
       let finalImagePublicId = form.imagePublicId || "";
-      const oldPublicId = materiel?.imagePublicId || form.imagePublicId;
+      const existingPublicId = materiel?.imagePublicId || form.imagePublicId;
+      const isEditMode = !!materiel?.id;
       
       // 1. GESTION DES IMAGES
       if (imageRemoved) {
+        // ❌ Image supprimée
         console.log("🚫 Image supprimée");
         finalImageUrl = "";
         finalImagePublicId = "";
-        if (oldPublicId) {
-          deleteFromCloudinary(oldPublicId);
+        
+        // Supprimer l'ancienne image de Cloudinary
+        if (existingPublicId) {
+          deleteFromCloudinary(existingPublicId);
         }
       } 
       else if (imageBlob) {
+        // 📤 Nouvelle image à uploader
         console.log("📤 Upload vers Cloudinary...");
-        const uploadResult = await uploadToCloudinary(imageBlob);
+        
+        // 🔄 OVERWRITE: Si on est en mode édition ET qu'il y a une image existante
+        // On réutilise le même publicId pour écraser l'image
+        const publicIdToUse = isEditMode && existingPublicId ? existingPublicId : undefined;
+        
+        const uploadResult = await uploadToCloudinary(imageBlob, publicIdToUse);
         finalImageUrl = uploadResult.imageUrl;
         finalImagePublicId = uploadResult.imagePublicId;
-        onClose();
         
-        if (oldPublicId && oldPublicId !== finalImagePublicId) {
-          deleteFromCloudinary(oldPublicId);
-        }
+        // ✅ Pas besoin de supprimer l'ancienne image car on a fait un overwrite !
+        console.log("✅ Image mise à jour avec overwrite - pas d'image orpheline");
       }
       
       // 2. PRÉPARATION DU PAYLOAD
@@ -512,20 +540,16 @@ const MaterielFormModal: React.FC<Props> = ({
         imagePublicId: finalImagePublicId,
       };
       
-      console.log("💾 Sauvegarde dans Firebase et LocalForage...", payload);
+      console.log("💾 Sauvegarde dans Firebase...", payload);
+      onClose();
       
-      // 3. SAUVEGARDE & SYNCHRONISATION
-      // Note: addMateriel et updateMateriel du DataContext s'occupent 
-      // de mettre à jour Firestore PUIS de re-fetcher les données 
-      // pour mettre à jour localForage avec les données serveur.
-      if (materiel?.id) {
+      // 3. SAUVEGARDE
+      if (isEditMode) {
         await updateMateriel(materiel.id, payload);
       } else {
         await addMateriel(payload);
       }
-      onClose();
-
-      // Une fois await terminé ici, le localForage est à jour via le contexte.
+      
       if (onSaved) onSaved();
 
     } catch (err) {
