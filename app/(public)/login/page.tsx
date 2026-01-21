@@ -99,7 +99,7 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit}>
             <TextField
               fullWidth
-              label="Email x"
+              label="Email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
