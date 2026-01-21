@@ -1,5 +1,7 @@
 "use client";
 
+import "./globals.css";
+
 import { ThemeProvider } from "@/context/ThemeContext";
 import { AuthProvider } from "@/context/AuthContext";
 import { DataProvider } from "@/context/DataContext";
