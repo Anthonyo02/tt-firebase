@@ -16,7 +16,7 @@ import {
   IconButton,
 } from "@mui/material";
 import { Visibility, VisibilityOff, Email, Lock } from "@mui/icons-material";
-import { useAuth } from "@/context/AuthContext"; // ✅ Assure-toi que le chemin est correct
+import { useAuth } from "@/context/AuthContext"; // Assure-toi que le chemin est correct
 import logo from "@/public/images/logo.png";
 
 export default function LoginPage() {
@@ -35,7 +35,7 @@ export default function LoginPage() {
     }
   }, [user, router]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
 
@@ -53,8 +53,8 @@ export default function LoginPage() {
         setError(result.error || "Erreur inconnue");
       }
     } catch (err) {
+      console.error("Login unexpected error:", err);
       setError("Une erreur inattendue est survenue");
-      console.error(err);
     }
   };
 
@@ -74,6 +74,7 @@ export default function LoginPage() {
     >
       <Card sx={{ maxWidth: 420, width: "100%" }}>
         <CardContent sx={{ p: 4 }}>
+          {/* Logo & titre */}
           <Box sx={{ textAlign: "center", mb: 4 }}>
             <Box sx={{ width: 90, height: 90, mx: "auto", mb: 2 }}>
               <Image src={logo} alt="logo" width={90} height={90} priority />
@@ -87,12 +88,14 @@ export default function LoginPage() {
             </Typography>
           </Box>
 
+          {/* Message d'erreur */}
           {error && (
             <Alert severity="error" sx={{ mb: 3 }}>
               {error}
             </Alert>
           )}
 
+          {/* Formulaire */}
           <form onSubmit={handleSubmit}>
             <TextField
               fullWidth
@@ -125,7 +128,10 @@ export default function LoginPage() {
                 ),
                 endAdornment: (
                   <InputAdornment position="end">
-                    <IconButton onClick={() => setShowPassword(!showPassword)}>
+                    <IconButton
+                      onClick={() => setShowPassword(!showPassword)}
+                      edge="end"
+                    >
                       {showPassword ? <VisibilityOff /> : <Visibility />}
                     </IconButton>
                   </InputAdornment>

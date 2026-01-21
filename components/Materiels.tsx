@@ -344,9 +344,25 @@ const Materiels: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const { materiels, deleteMateriel } = useData();
-  const { isAdmin } = useAuth();
   const { isPoor } = useConnectionStatus();
-
+  const [localUser, setLocalUser] = useState<{
+    nom?: string;
+    email?: string;
+    role?: string;
+  }>({});
+  const isAdmin = localUser?.role === "admin";
+  useEffect(() => {
+    const stored = localStorage.getItem("user");
+    if (stored) {
+      try {
+        setLocalUser(JSON.parse(stored));
+      } catch {
+        setLocalUser({});
+      }
+    } else {
+      setLocalUser({});
+    }
+  }, []);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editMateriel, setEditMateriel] = useState<Materiel | null>(null);

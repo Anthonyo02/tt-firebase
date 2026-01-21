@@ -46,14 +46,21 @@ interface HeaderProps {
 // Interface pour typer la configuration de connexion
 interface StatusConfig {
   label: string;
-  color: "success" | "warning" | "default" | "error" | "primary" | "secondary" | "info";
+  color:
+    | "success"
+    | "warning"
+    | "default"
+    | "error"
+    | "primary"
+    | "secondary"
+    | "info";
   icon: React.ReactElement;
   tooltip: string;
 }
 
 const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   const theme = useTheme();
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout } = useAuth();
   const { mode, toggleTheme } = useAppTheme();
   const { status } = useConnectionStatus();
 
@@ -68,7 +75,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
     email?: string;
     role?: string;
   }>({});
-
+  const isAdmin = localUser?.role === "admin";
   useEffect(() => {
     const stored = localStorage.getItem("user");
     if (stored) {
@@ -99,7 +106,8 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
       label: "En ligne",
       color: "success",
       icon: <Wifi />,
-      tooltip: "Connexion stable : toutes les fonctionnalités sont disponibles.",
+      tooltip:
+        "Connexion stable : toutes les fonctionnalités sont disponibles.",
     },
     unstable: {
       label: "Instable",

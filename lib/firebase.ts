@@ -1,7 +1,8 @@
-"use client"; // 🔹 Important si tu l’utilises côté client
-
-import { initializeApp, getApps, getApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+// lib/firebase.ts
+import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
+import { getFirestore, Firestore } from "firebase/firestore";
+import { getAuth, Auth } from "firebase/auth";
+import { getFunctions, Functions } from "firebase/functions";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -12,8 +13,13 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// 🔹 Initialise l’app Firebase une seule fois
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+// 🔹 Initialise l'app Firebase une seule fois
+const app: FirebaseApp = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Firestore
-export const db = getFirestore(app);
+// 🔹 Services Firebase
+export const auth: Auth = getAuth(app);
+export const db: Firestore = getFirestore(app);
+export const functions: Functions = getFunctions(app);
+
+// 🔹 Export app si besoin ailleurs
+export { app };

@@ -1,185 +1,114 @@
 "use client";
 
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  ReactNode,
-} from "react";
-
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { 
+  getAuth, 
+  signInWithEmailAndPassword, 
+  signOut as firebaseSignOut, 
+  onAuthStateChanged, 
+  User as FirebaseUser 
+} from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import {
-  doc,
-  getDoc,
-  collection,
-  query,
-  where,
-  getDocs,
-} from "firebase/firestore";
 
 export interface User {
   id: string;
   nom: string;
   email: string;
-  role: "admin" | "employer";
+  role: string;
 }
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
-  login: (
-    email: string,
-    password: string
-  ) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
-  isAdmin: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const auth = getAuth();
 
-  // ============================
-  // 🔐 CHECK USER AU DÉMARRAGE
-  // ============================
+  // 🔹 Observer l'état de connexion
   useEffect(() => {
-    let cancelled = false;
-
-    // ⏱️ Timeout OFFLINE (IMPORTANT)
-    const timeout = setTimeout(() => {
-      if (!cancelled) {
-        console.warn("⏱️ Auth timeout → offline mode");
-        setIsLoading(false);
-      }
-    }, 1500);
-
-    const initAuth = async () => {
-      const storedUser = localStorage.getItem("user");
-
-      if (storedUser) {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
+      if (firebaseUser) {
         try {
-          const parsedUser: User = JSON.parse(storedUser);
-          setUser(parsedUser);
-
-          // 🔥 Vérifier Firestore SEULEMENT si online
-          if (navigator.onLine) {
-            await verifyUser(parsedUser);
+          const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+          if (userDoc.exists()) {
+            const data = userDoc.data();
+            const userObj: User = {
+              id: firebaseUser.uid,
+              nom: data.nom,
+              email: data.email,
+              role: data.role,
+            };
+            setUser(userObj);
+            localStorage.setItem("user", JSON.stringify(userObj));
+          } else {
+            setUser(null);
+            localStorage.removeItem("user");
           }
-        } catch {
-          localStorage.removeItem("user");
+        } catch (err) {
+          console.error("Erreur récupération user Firestore:", err);
+          setUser(null);
         }
-      }
-
-      if (!cancelled) {
-        setIsLoading(false);
-        clearTimeout(timeout);
-      }
-    };
-
-    initAuth();
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timeout);
-    };
-  }, []);
-
-  // ============================
-  // 🔍 VERIFY USER (ONLINE ONLY)
-  // ============================
-  const verifyUser = async (currentUser: User) => {
-    try {
-      const userRef = doc(db, "users", currentUser.id);
-      const userSnap = await getDoc(userRef);
-
-      if (!userSnap.exists()) {
-        logout();
       } else {
-        const data = userSnap.data();
-        if (data.role !== currentUser.role) {
-          const updatedUser = { ...currentUser, role: data.role };
-          setUser(updatedUser);
-          localStorage.setItem("user", JSON.stringify(updatedUser));
-        }
+        setUser(null);
+        localStorage.removeItem("user");
       }
-    } catch (error) {
-      console.log("⚠️ Verify skipped (offline)");
-    }
-  };
+      setIsLoading(false);
+    });
 
-  // ============================
-  // 🔑 LOGIN
-  // ============================
-  const login = async (
-    email: string,
-    password: string
-  ): Promise<{ success: boolean; error?: string }> => {
-    setIsLoading(true);
+    return () => unsubscribe();
+  }, [auth]);
 
+  // 🔹 Fonction login
+  const login = async (email: string, password: string) => {
     try {
-      const usersRef = collection(db, "users");
-      const q = query(
-        usersRef,
-        where("email", "==", email),
-        where("password", "==", password)
-      );
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const firebaseUser = userCredential.user;
 
-      const snap = await getDocs(q);
+      // Récupérer les infos Firestore
+      const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+      if (!userDoc.exists()) throw new Error("Utilisateur introuvable");
 
-      if (snap.empty) {
-        return { success: false, error: "Email ou mot de passe incorrect" };
-      }
-
-      const docUser = snap.docs[0];
-      const data = docUser.data();
-
+      const data = userDoc.data();
       const userObj: User = {
-        id: docUser.id,
-        nom: data.nom || "Utilisateur",
+        id: firebaseUser.uid,
+        nom: data.nom,
         email: data.email,
-        role: data.role || "employer",
+        role: data.role,
       };
-
       setUser(userObj);
       localStorage.setItem("user", JSON.stringify(userObj));
-
       return { success: true };
-    } catch (error) {
-      console.error("Erreur login:", error);
-      return { success: false, error: "Serveur inaccessible" };
-    } finally {
-      setIsLoading(false);
+    } catch (err: any) {
+      console.error("Login error:", err);
+      return { success: false, error: err.message || "Erreur inconnue" };
     }
   };
 
-  // ============================
-  // 🚪 LOGOUT
-  // ============================
-  const logout = () => {
+  // 🔹 Fonction logout
+  const logout = async () => {
+    await firebaseSignOut(auth);
     setUser(null);
     localStorage.removeItem("user");
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isLoading,
-        login,
-        logout,
-        isAdmin: user?.role === "admin",
-      }}
-    >
+    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
+// 🔹 Hook pratique
 export const useAuth = () => {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
-  return ctx;
+  const context = useContext(AuthContext);
+  if (!context) throw new Error("useAuth doit être utilisé à l'intérieur d'un AuthProvider");
+  return context;
 };

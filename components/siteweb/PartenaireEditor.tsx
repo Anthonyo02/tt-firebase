@@ -183,6 +183,7 @@ export default function PartenaireEditor() {
   const [loading, setLoading] = useState(true);
   const [tabValue, setTabValue] = useState(0);
   const [saving, setSaving] = useState(false);
+  
   const [deletingItem, setDeletingItem] = useState<string | null>(null);
   const [toast, setToast] = useState<{
     msg: string;

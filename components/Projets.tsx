@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Card,
@@ -98,7 +98,24 @@ const formatDate = (dateStr?: string) => {
    COMPONENT
 ===================================================== */
 const Projets: React.FC = () => {
-  const { isAdmin } = useAuth();
+    const [localUser, setLocalUser] = useState<{
+      nom?: string;
+      email?: string;
+      role?: string;
+    }>({});
+    const isAdmin = localUser?.role === "admin";
+    useEffect(() => {
+      const stored = localStorage.getItem("user");
+      if (stored) {
+        try {
+          setLocalUser(JSON.parse(stored));
+        } catch {
+          setLocalUser({});
+        }
+      } else {
+        setLocalUser({});
+      }
+    }, []);
   
   // ✅ On récupère les données et la fonction delete depuis le Contexte
   const { projets, deleteProjet: contextDeleteProjet } = useData();

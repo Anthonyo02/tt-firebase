@@ -35,10 +35,15 @@ import {
   CheckCircle,
 } from "@mui/icons-material";
 import { TransitionProps } from "@mui/material/transitions";
-
-// 🔥 Import du Contexte
-import { useData } from "@/context/DataContext";
-
+import { app } from "@/lib/firebase";
+// 🔥 Firebase
+import { getFunctions, httpsCallable } from "firebase/functions";
+import { auth, db } from "@/lib/firebase";
+import { createUserWithEmailAndPassword, getAuth, signOut } from "firebase/auth";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { getApp, initializeApp } from "firebase/app";
+const functions = getFunctions();
+const createUserFn = httpsCallable(functions, "createUser");
 /* =======================
    THEME (GLOBAL IDENTITY)
 ======================= */
@@ -52,7 +57,7 @@ const PRIMARY_SOFT = "#f3f4ed";
 ======================= */
 const Transition = React.forwardRef(function Transition(
   props: TransitionProps & { children: React.ReactElement },
-  ref: React.Ref<unknown>,
+  ref: React.Ref<unknown>
 ) {
   return <Slide direction="up" ref={ref} {...props} />;
 });
@@ -68,11 +73,7 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({
   onClose,
   setReload,
 }) => {
-  // 🔥 Récupération des fonctions du contexte
-  const { addUser, fetchUsers } = useData();
-
   const [form, setForm] = useState({
-    id: "",
     nom: "",
     email: "",
     password: "",
@@ -102,61 +103,93 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({
   };
 
   const handleClose = () => {
-     onClose();
+    onClose();
     if (!isLoading) {
-      setForm({ id: "", nom: "", email: "", password: "", role: "employer" });
+      setForm({ nom: "", email: "", password: "", role: "employer" });
       setError("");
       setSuccess(false);
       setConfirmPassword("");
     }
   };
 
-  // 🔥 Logique mise à jour avec LocalForage via Context
-  const save = async () => {
-    if (!isFormValid) {
-      setError("Veuillez remplir correctement tous les champs");
-      return;
-    }
+  // 🔥 Création utilisateur Auth + Firestore
+ const functions = getFunctions(app);
+const createUserFn = httpsCallable(functions, "createUser");
+
+// Dans votre composant :
+const save = async () => {
+    // Validation basique
+    if (!form.nom || !form.email || !form.password) return;
 
     setIsLoading(true);
     setError("");
-    setSuccess(false);
 
+    // 1️⃣ Créer une application Firebase SECONDAIRE pour ne pas déconnecter l'admin
+    const secondaryAppName = "secondaryApp";
+    let secondaryApp;
+    
     try {
-      // 1. Sauvegarde dans Firestore via le Contexte
-      const newUserPayload = {
+      // Essayer de récupérer ou créer l'app secondaire
+      try {
+        secondaryApp = getApp(secondaryAppName);
+      } catch (e) {
+        // Si elle n'existe pas, on l'initialise avec la même config que l'app principale
+        secondaryApp = initializeApp(app.options, secondaryAppName);
+      }
+
+      const secondaryAuth = getAuth(secondaryApp);
+
+      // 2️⃣ Créer l'utilisateur dans AUTH (sur l'app secondaire)
+      const userCredential = await createUserWithEmailAndPassword(
+        secondaryAuth,
+        form.email,
+        form.password
+      );
+      
+      const uid = userCredential.user.uid;
+
+      // Déconnecter l'utilisateur de l'instance secondaire immédiatement
+      await signOut(secondaryAuth);
+
+      // 3️⃣ Stocker les infos dans FIRESTORE (avec l'app principale 'db')
+      // On utilise 'db' ici car l'admin est toujours connecté sur l'app principale
+      await setDoc(doc(db, "users", uid), {
+        uid: uid,
         nom: form.nom,
         email: form.email,
-        password: form.password,
         role: form.role,
-        // createdAt est géré côté serveur ou dans addUser
-      };
+        createdAt: serverTimestamp(),
+      });
 
-      console.log("💾 Ajout de l'utilisateur...");
-      await addUser(newUserPayload);
-      onClose();
-      // 2. SYNCHRONISATION AVEC LOCALFORAGE
-      // On force le fetch pour récupérer les données serveur et mettre à jour le cache local
-      console.log("🔄 Synchronisation avec LocalForage...");
-      await fetchUsers();
-
-      // Succès
+      console.log("✅ Utilisateur créé Auth + Firestore !");
       setSuccess(true);
-      if (setReload) setReload(); // Notifier le parent si nécessaire
+      if (setReload) setReload();
+
+      // Nettoyage de l'app secondaire (optionnel mais recommandé)
+      // await deleteApp(secondaryApp); 
 
       setTimeout(() => {
         setSuccess(false);
         handleClose();
       }, 1500);
+
     } catch (err: any) {
-      console.error("❌ Erreur création user:", err);
-      setError("Erreur lors de la création de l'utilisateur : " + err.message);
+      console.error("❌ Erreur:", err);
+      // Gestion des erreurs Firebase courantes
+      if (err.code === 'auth/email-already-in-use') {
+        setError("Cet email est déjà utilisé.");
+      } else {
+        setError(err.message);
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
+
+
   return (
+    
     <Dialog
       open={open}
       onClose={!isLoading ? handleClose : undefined}
@@ -177,9 +210,7 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({
         },
       }}
     >
-      {/* =======================
-          HEADER
-      ======================= */}
+      {/* HEADER */}
       <Box
         sx={{
           background:
@@ -191,28 +222,6 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({
           color: "white",
         }}
       >
-        <Box
-          sx={{
-            position: "absolute",
-            width: 300,
-            height: 300,
-            borderRadius: "50%",
-            bgcolor: "rgba(255,255,255,0.1)",
-            top: -100,
-            right: -50,
-          }}
-        />
-        <Box
-          sx={{
-            position: "absolute",
-            width: 150,
-            height: 150,
-            borderRadius: "50%",
-            bgcolor: "rgba(255,255,255,0.08)",
-            bottom: -30,
-            left: "30%",
-          }}
-        />
         <IconButton
           onClick={handleClose}
           disabled={isLoading}
@@ -223,15 +232,11 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({
             color: "white",
             bgcolor: "rgba(255,255,255,0.15)",
             transition: "all .3s ease",
-            "&:hover": {
-              bgcolor: "rgba(255,255,255,0.25)",
-              transform: "rotate(90deg) scale(1.1)",
-            },
+            "&:hover": { bgcolor: "rgba(255,255,255,0.25)", transform: "rotate(90deg) scale(1.1)" },
           }}
         >
           <Close />
         </IconButton>
-
         <Box sx={{ display: "flex", alignItems: "center", gap: 2.5 }}>
           <Avatar
             sx={{
@@ -243,7 +248,6 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({
           >
             <PersonAdd sx={{ fontSize: 28 }} />
           </Avatar>
-
           <Box>
             <Typography variant="h5" fontWeight={700}>
               Créer un compte
@@ -255,37 +259,23 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({
         </Box>
       </Box>
 
-      {/* =======================
-          CONTENT
-      ======================= */}
+      {/* CONTENT */}
       <DialogContent sx={{ p: 4 }}>
-        {/* ERROR */}
-        <Fade in={!!error}>
-          <Box>
-            {error && (
-              <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
-                {error}
-              </Alert>
-            )}
-          </Box>
-        </Fade>
+        {error && (
+          <Fade in={!!error}>
+            <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
+              {error}
+            </Alert>
+          </Fade>
+        )}
 
-        {/* SUCCESS */}
-        <Fade in={success}>
-          <Box>
-            {success && (
-              <Alert
-                severity="success"
-                icon={<CheckCircle />}
-                sx={{ mb: 3, borderRadius: 2 }}
-              >
-                <Typography fontWeight={600}>
-                  Compte créé avec succès 🎉
-                </Typography>
-              </Alert>
-            )}
-          </Box>
-        </Fade>
+        {success && (
+          <Fade in={success}>
+            <Alert severity="success" icon={<CheckCircle />} sx={{ mb: 3, borderRadius: 2 }}>
+              <Typography fontWeight={600}>Compte créé avec succès 🎉</Typography>
+            </Alert>
+          </Fade>
+        )}
 
         <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
           <TextField
@@ -327,9 +317,7 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({
             fullWidth
             autoComplete="new-password"
             disabled={isLoading}
-            helperText={
-              form.password && !isPasswordValid ? "Minimum 6 caractères" : ""
-            }
+            helperText={form.password && !isPasswordValid ? "Minimum 6 caractères" : ""}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -338,10 +326,7 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({
               ),
               endAdornment: (
                 <InputAdornment position="end">
-                  <IconButton
-                    onClick={() => setShowPassword(!showPassword)}
-                    edge="end"
-                  >
+                  <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
                     {showPassword ? <VisibilityOff /> : <Visibility />}
                   </IconButton>
                 </InputAdornment>
@@ -358,11 +343,7 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({
             autoComplete="new-password"
             disabled={isLoading}
             error={confirmPassword !== "" && !doPasswordsMatch}
-            helperText={
-              confirmPassword && !doPasswordsMatch
-                ? "Les mots de passe ne correspondent pas"
-                : ""
-            }
+            helperText={confirmPassword && !doPasswordsMatch ? "Les mots de passe ne correspondent pas" : ""}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
@@ -371,10 +352,7 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({
               ),
               endAdornment: (
                 <InputAdornment position="end">
-                  <IconButton
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    edge="end"
-                  >
+                  <IconButton onClick={() => setShowConfirmPassword(!showConfirmPassword)} edge="end">
                     {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
                   </IconButton>
                 </InputAdornment>
@@ -384,24 +362,15 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({
 
           <FormControl fullWidth>
             <InputLabel>Rôle</InputLabel>
-            <Select
-              value={form.role}
-              label="Rôle"
-              onChange={(e) => handleChange("role", e.target.value)}
-            >
+            <Select value={form.role} label="Rôle" onChange={(e) => handleChange("role", e.target.value)}>
               <MenuItem value="employer">
                 <Box sx={{ display: "flex", gap: 1.5 }}>
-                  <Work sx={{ color: "#2e7d32" }} />
-                  Employé
-                  <Chip label="Standard" size="small" />
+                  <Work sx={{ color: "#2e7d32" }} /> Employé <Chip label="Standard" size="small" />
                 </Box>
               </MenuItem>
-
               <MenuItem value="admin">
                 <Box sx={{ display: "flex", gap: 1.5 }}>
-                  <AdminPanelSettings sx={{ color: "#d32f2f" }} />
-                  Administrateur
-                  <Chip label="Full access" size="small" />
+                  <AdminPanelSettings sx={{ color: "#d32f2f" }} /> Administrateur <Chip label="Full access" size="small" />
                 </Box>
               </MenuItem>
             </Select>
@@ -409,19 +378,9 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({
         </Box>
       </DialogContent>
 
-      {/* =======================
-          FOOTER
-      ======================= */}
-      <DialogActions
-        sx={{
-          p: 3,
-          background:
-            "linear-gradient(135deg, #818660 0%, #d6d8c5ff 50%, #6b7052 100%)",
-        }}
-      >
-        <Button onClick={handleClose} disabled={isLoading}>
-          Annuler
-        </Button>
+      {/* FOOTER */}
+      <DialogActions sx={{ p: 3, background: "linear-gradient(135deg, #818660 0%, #d6d8c5ff 50%, #6b7052 100%)" }}>
+        <Button onClick={handleClose} disabled={isLoading}>Annuler</Button>
 
         <Button
           variant="contained"
@@ -439,13 +398,7 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({
             },
           }}
         >
-          {isLoading ? (
-            <CircularProgress size={22} sx={{ color: "white" }} />
-          ) : success ? (
-            "Créé"
-          ) : (
-            "Créer le compte"
-          )}
+          {isLoading ? <CircularProgress size={22} sx={{ color: "white" }} /> : success ? "Créé" : "Créer le compte"}
         </Button>
       </DialogActions>
     </Dialog>

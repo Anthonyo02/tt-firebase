@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   Drawer,
   List,
@@ -14,7 +14,15 @@ import {
   useTheme,
   Badge,
 } from "@mui/material";
-import { Dashboard, Folder, Inventory2, Inventory, Web, OfflinePin, WifiOff } from "@mui/icons-material";
+import {
+  Dashboard,
+  Folder,
+  Inventory2,
+  Inventory,
+  Web,
+  OfflinePin,
+  WifiOff,
+} from "@mui/icons-material";
 import { useAuth } from "@/context/AuthContext";
 import { usePathname, useRouter } from "next/navigation";
 import logo from "../../public/images/logo.png";
@@ -36,16 +44,35 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onClose }) => {
   const pathname = usePathname();
   const router = useRouter();
 
- const menuItems = [
-  { text: "Dashboard", icon: <Dashboard />, path: "/" },
-  { text: "Projets", icon: <Folder />, path: "/projets" },
-  { text: "Matériels", icon: <Inventory2 />, path: "/materiels" },
-  ...(isOffline
-    ? [{ text: "Hors Ligne", icon: <WifiOff />, path: "/offline" }]
-    : []),
-
-  { text: "Site Web Tolotady", icon: <Web />, path: "siteweb" },
-];
+  const [localUser, setLocalUser] = useState<{
+    nom?: string;
+    email?: string;
+    role?: string;
+  }>({});
+  const isAdmin = localUser?.role === "admin";
+  useEffect(() => {
+    const stored = localStorage.getItem("user");
+    if (stored) {
+      try {
+        setLocalUser(JSON.parse(stored));
+      } catch {
+        setLocalUser({});
+      }
+    } else {
+      setLocalUser({});
+    }
+  }, []);
+  const menuItems = [
+    { text: "Dashboard", icon: <Dashboard />, path: "/" },
+    { text: "Projets", icon: <Folder />, path: "/projets" },
+    { text: "Matériels", icon: <Inventory2 />, path: "/materiels" },
+    ...(isOffline
+      ? [{ text: "Hors Ligne", icon: <WifiOff />, path: "/offline" }]
+      : []),
+    ...(isAdmin
+      ? [{ text: "Site Web Tolotady", icon: <Web />, path: "/siteweb" }]
+      : []),
+  ];
 
   const handleNavigate = (path: string) => {
     router.push(path);
@@ -98,9 +125,7 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onClose }) => {
           >
             <ListItemButton
               onClick={() =>
-                item.path
-                  ? handleNavigate(item.path)
-                  : window.open(item.path)
+                item.path ? handleNavigate(item.path) : window.open(item.path)
               }
               sx={{
                 borderRadius: 2,
