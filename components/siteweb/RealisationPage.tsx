@@ -98,10 +98,11 @@ interface PendingImage {
 
 // --- Clients disponibles ---
 const CLIENT_OPTIONS = [
-  { value: "ARABE", label: "ARABE", color: "#616637" }, // Adapté au nouveau thème
-  { value: "LOVIA", label: "LOVIA", color: "#EC4899" },
-  { value: "SOSIALY", label: "SOSIALY", color: "#10B981" },
-  { value: "TT MARKET PLACE", label: "TT MARKET PLACE", color: "#F59E0B" },
+  { value: "arabe", label: "ARABE", color: "#616637" }, // Adapté au nouveau thème
+  { value: "lovia", label: "LOVIA", color: "#EC4899" },
+  { value: "sosialy", label: "SOSIALY", color: "#10B981" },
+  { value: "market", label: "TT MARKET PLACE", color: "#F59E0B" },
+  { value: "autre", label: "AUTRE", color: "#7f7f7f" },
 ];
 
 // --- Theme Colors ---

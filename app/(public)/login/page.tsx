@@ -16,26 +16,28 @@ import {
   IconButton,
 } from "@mui/material";
 import { Visibility, VisibilityOff, Email, Lock } from "@mui/icons-material";
-import { useAuth } from "@/context/AuthContext"; // Assure-toi que le chemin est correct
+import { useAuth } from "@/context/AuthContext";
 import logo from "@/public/images/logo.png";
 
 export default function LoginPage() {
   const router = useRouter();
   const { user, login, isLoading } = useAuth();
 
+  const [load, setload] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
 
-  // 🔹 Redirection automatique si déjà connecté
+  // 🔹 Redirection si déjà connecté
   useEffect(() => {
     if (user) {
-      router.replace("/"); // redirige vers la page principale
+      router.replace("/");
     }
   }, [user, router]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    setload(true);
     e.preventDefault();
     setError("");
 
@@ -46,15 +48,18 @@ export default function LoginPage() {
 
     try {
       const result = await login(email, password);
+      setload(true);
 
       if (result.success) {
-        router.push("/"); // redirige après login
+        router.push("/");
       } else {
         setError(result.error || "Erreur inconnue");
+        setload(true);
       }
     } catch (err) {
-      console.error("Login unexpected error:", err);
+      console.error("Login error:", err);
       setError("Une erreur inattendue est survenue");
+      setload(true);
     }
   };
 
@@ -65,22 +70,17 @@ export default function LoginPage() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: (theme) =>
-          theme.palette.mode === "light"
-            ? "linear-gradient(135deg, #818660 0%, #C6C9B9 50%, #D9CBC0 100%)"
-            : "linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%)",
-        padding: 2,
+        background:
+          "linear-gradient(135deg, #818660 0%, #C6C9B9 50%, #D9CBC0 100%)",
+        p: 2,
       }}
     >
       <Card sx={{ maxWidth: 420, width: "100%" }}>
         <CardContent sx={{ p: 4 }}>
-          {/* Logo & titre */}
-          <Box sx={{ textAlign: "center", mb: 4 }}>
-            <Box sx={{ width: 90, height: 90, mx: "auto", mb: 2 }}>
-              <Image src={logo} alt="logo" width={90} height={90} priority />
-            </Box>
-
-            <Typography variant="h4" fontWeight={700} gutterBottom>
+          {/* Logo */}
+          <Box textAlign="center" mb={4}>
+            <Image src={logo} alt="logo" width={90} height={90} priority />
+            <Typography variant="h4" fontWeight={700} mt={2}>
               T~T Stock
             </Typography>
             <Typography variant="body2" color="text.secondary">
@@ -88,7 +88,7 @@ export default function LoginPage() {
             </Typography>
           </Box>
 
-          {/* Message d'erreur */}
+          {/* Erreur */}
           {error && (
             <Alert severity="error" sx={{ mb: 3 }}>
               {error}
@@ -128,10 +128,7 @@ export default function LoginPage() {
                 ),
                 endAdornment: (
                   <InputAdornment position="end">
-                    <IconButton
-                      onClick={() => setShowPassword(!showPassword)}
-                      edge="end"
-                    >
+                    <IconButton onClick={() => setShowPassword(!showPassword)}>
                       {showPassword ? <VisibilityOff /> : <Visibility />}
                     </IconButton>
                   </InputAdornment>
@@ -144,10 +141,17 @@ export default function LoginPage() {
               fullWidth
               variant="contained"
               size="large"
-              disabled={isLoading || !email || !password}
+              disabled={load || !email || !password}
               sx={{ mt: 3 }}
             >
-              {isLoading ? <CircularProgress size={24} color="inherit" /> : "Se connecter"}
+              {load ? (
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <CircularProgress size={20} color="inherit" />
+                  <span>Connexion...</span>
+                </Box>
+              ) : (
+                "Se connecter"
+              )}
             </Button>
           </form>
         </CardContent>

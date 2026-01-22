@@ -12,44 +12,31 @@ import {
   Typography,
   useMediaQuery,
   useTheme,
-  Badge,
 } from "@mui/material";
 import {
   Dashboard,
   Folder,
   Inventory2,
-  Inventory,
   Web,
-  OfflinePin,
   WifiOff,
 } from "@mui/icons-material";
-import { useAuth } from "@/context/AuthContext";
 import { usePathname, useRouter } from "next/navigation";
 import logo from "../../public/images/logo.png";
 import Image from "next/image";
 import { useConnectionStatus } from "@/hooks/useConnectionStatus";
 
-interface SidebarProps {
-  open: boolean;
-  onClose: () => void;
+// --- SOUS-COMPOSANT : Contenu de la Sidebar ---
+// Cela remplace la variable "drawerContent"
+interface SidebarContentProps {
+  onNavigate: (path: string) => void;
+  pathname: string;
 }
 
-const DRAWER_WIDTH = 260;
-
-const Sidebar: React.FC<SidebarProps> = ({ open, onClose }) => {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+const SidebarContent: React.FC<SidebarContentProps> = ({ onNavigate, pathname }) => {
   const { isOffline } = useConnectionStatus();
-
-  const pathname = usePathname();
-  const router = useRouter();
-
-  const [localUser, setLocalUser] = useState<{
-    nom?: string;
-    email?: string;
-    role?: string;
-  }>({});
-  const isAdmin = localUser?.role === "admin";
+  
+  // Gestion utilisateur locale
+  const [localUser, setLocalUser] = useState<{ role?: string }>({});
   useEffect(() => {
     const stored = localStorage.getItem("user");
     if (stored) {
@@ -58,10 +45,11 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onClose }) => {
       } catch {
         setLocalUser({});
       }
-    } else {
-      setLocalUser({});
     }
   }, []);
+
+  const isAdmin = localUser?.role === "admin";
+
   const menuItems = [
     { text: "Dashboard", icon: <Dashboard />, path: "/" },
     { text: "Projets", icon: <Folder />, path: "/projets" },
@@ -74,12 +62,7 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onClose }) => {
       : []),
   ];
 
-  const handleNavigate = (path: string) => {
-    router.push(path);
-    if (isMobile) onClose();
-  };
-
-  const drawerContent = (
+  return (
     <Box
       sx={{
         height: "100%",
@@ -99,15 +82,15 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onClose }) => {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            overflow: "hidden", // important pour borderRadius
+            overflow: "hidden",
           }}
         >
           <Image
             src={logo}
             alt="logo"
-            width={60} // largeur fixe
-            height={60} // hauteur fixe
-            style={{ objectFit: "contain" }} // pour que le logo garde ses proportions
+            width={60}
+            height={60}
+            style={{ objectFit: "contain" }}
           />
         </Box>
         <Typography variant="h6" fontWeight={700}>
@@ -118,15 +101,9 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onClose }) => {
       {/* Navigation */}
       <List sx={{ px: 2, flex: 1 }}>
         {menuItems.map((item) => (
-          <ListItem
-            key={item.path || item.path} // utiliser path ou path pour clé unique
-            disablePadding
-            sx={{ mb: 0.5 }}
-          >
+          <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
             <ListItemButton
-              onClick={() =>
-                item.path ? handleNavigate(item.path) : window.open(item.path)
-              }
+              onClick={() => onNavigate(item.path)}
               sx={{
                 borderRadius: 2,
                 py: 1.5,
@@ -158,7 +135,35 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onClose }) => {
       </Box>
     </Box>
   );
+};
 
+// --- COMPOSANT PRINCIPAL ---
+
+interface SidebarProps {
+  open: boolean;
+  onClose: () => void;
+  // Optionnel : on peut passer la largeur en prop si besoin de flexibilité
+  width?: number; 
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ open, onClose, width = 260 }) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const pathname = usePathname();
+  const router = useRouter();
+
+  const handleNavigate = (path: string) => {
+    // Gestion simple : si lien externe ou interne
+    if (path.startsWith("http")) {
+       window.open(path);
+    } else {
+       router.push(path);
+    }
+    
+    if (isMobile) onClose();
+  };
+
+  // Option 1 : Mobile (Temporary Drawer)
   if (isMobile) {
     return (
       <Drawer
@@ -168,27 +173,38 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onClose }) => {
         ModalProps={{ keepMounted: true }}
         sx={{
           "& .MuiDrawer-paper": {
-            width: DRAWER_WIDTH,
+            width: width, // Utilisation de la prop ou valeur par défaut
             border: "none",
+            boxSizing: "border-box",
           },
         }}
       >
-        {drawerContent}
+        <SidebarContent onNavigate={handleNavigate} pathname={pathname} />
       </Drawer>
     );
   }
 
+  // Option 2 : Desktop (Permanent Drawer)
   return (
-    <Drawer
-      variant="permanent"
-      sx={{
-        width: DRAWER_WIDTH,
-        flexShrink: 0,
-        "& .MuiDrawer-paper": { width: DRAWER_WIDTH, border: "none" },
-      }}
+    <Box
+      component="nav"
+      sx={{ width: { md: width }, flexShrink: { md: 0 } }}
     >
-      {drawerContent}
-    </Drawer>
+      <Drawer
+        variant="permanent"
+        sx={{
+          display: { xs: "none", md: "block" },
+          "& .MuiDrawer-paper": {
+            width: width, // Utilisation de la prop ou valeur par défaut
+            border: "none",
+            boxSizing: "border-box",
+          },
+        }}
+        open
+      >
+        <SidebarContent onNavigate={handleNavigate} pathname={pathname} />
+      </Drawer>
+    </Box>
   );
 };
 

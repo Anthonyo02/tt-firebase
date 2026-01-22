@@ -40,6 +40,14 @@ import {
 import { useData } from "@/context/DataContext";
 import { TransitionProps } from "@mui/material/transitions";
 
+// 🔥 Firebase Auth
+import {
+  getAuth,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword,
+} from "firebase/auth";
+
 interface User {
   id: string;
   nom: string;
@@ -66,12 +74,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   user,
 }) => {
   const theme = useTheme();
-  const { updateUser } = useData();
+  const { updateUser, fetchUsers } = useData(); // 🔥 Ajout fetchUsers
 
   const [form, setForm] = useState({
     id: "",
     nom: "",
     email: "",
+    oldPassword: "", // 🔥 Ajout ancien mot de passe
     password: "",
     confirmPassword: "",
     role: "",
@@ -83,6 +92,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [showEdit, setShowEdit] = useState(false);
   const [showEditMdp, setShowEditMdp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showOldPassword, setShowOldPassword] = useState(false); // 🔥 Ajout
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   useEffect(() => {
@@ -92,6 +102,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       id: user.id,
       nom: user.nom,
       email: user.email,
+      oldPassword: "", // 🔥 Reset
       password: "",
       confirmPassword: "",
       role: user.role,
@@ -103,9 +114,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     setError("");
   };
 
+  // 🔥 NOUVELLE FONCTION SAVE AVEC FIREBASE AUTH
   const handleSave = async () => {
-    if (!form.nom || !form.email) {
-      setError("Nom et Email sont obligatoires");
+    if (!form.nom) {
+      setError("Le nom est obligatoire");
       return;
     }
 
@@ -115,25 +127,74 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     }
 
     setIsLoading(true);
+    setError("");
 
     try {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+
+      if (!currentUser) {
+        throw new Error("Utilisateur non connecté.");
+      }
+
+      /* 🔐 CHANGEMENT MOT DE PASSE AVEC FIREBASE AUTH */
+      if (form.oldPassword || form.password) {
+        if (!form.oldPassword || !form.password) {
+          throw new Error("L'ancien et le nouveau mot de passe sont requis.");
+        }
+
+        if (form.password !== form.confirmPassword) {
+          throw new Error("Les mots de passe ne correspondent pas.");
+        }
+
+        // Réauthentification
+        const credential = EmailAuthProvider.credential(
+          currentUser.email!,
+          form.oldPassword
+        );
+
+        await reauthenticateWithCredential(currentUser, credential);
+        await updatePassword(currentUser, form.password);
+      }
+
+      /* 🗂️ UPDATE FIRESTORE (nom et role uniquement) */
       await updateUser(form.id, {
         nom: form.nom,
-        email: form.email,
         role: form.role,
-        ...(form.password ? { password: form.password } : {}),
       });
+
+      await fetchUsers();
 
       setSuccess(true);
 
       setTimeout(() => {
         setSuccess(false);
         setShowEdit(false);
+        setShowEditMdp(false);
+        // Reset password fields
+        setForm((prev) => ({
+          ...prev,
+          oldPassword: "",
+          password: "",
+          confirmPassword: "",
+        }));
         onClose();
       }, 1200);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError("Erreur lors de la mise à jour du profil");
+
+      // 🔥 Gestion des erreurs Firebase Auth
+      if (err.code === "auth/wrong-password") {
+        setError("Ancien mot de passe incorrect.");
+      } else if (err.code === "auth/weak-password") {
+        setError("Mot de passe trop faible (6 caractères minimum).");
+      } else if (err.code === "auth/requires-recent-login") {
+        setError("Veuillez vous reconnecter pour changer le mot de passe.");
+      } else if (err.code === "auth/invalid-credential") {
+        setError("Ancien mot de passe incorrect.");
+      } else {
+        setError(err.message || "Erreur lors de la mise à jour.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -144,6 +205,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     setShowEditMdp(false);
     setError("");
     setSuccess(false);
+    // Reset password fields
+    setForm((prev) => ({
+      ...prev,
+      oldPassword: "",
+      password: "",
+      confirmPassword: "",
+    }));
     onClose();
   };
 
@@ -201,7 +269,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         elevation: 0,
         sx: {
           borderRadius: 4,
-          overflow: "hidden",
+          overflowY: "scroll",
           border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
           boxShadow: `0 25px 80px ${alpha("#000000ff", 0.25)}`,
         },
@@ -237,7 +305,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           },
         }}
       >
-          <Box
+        <Box
           sx={{
             position: "absolute",
             width: 300,
@@ -317,6 +385,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           </Box>
           <IconButton
             onClick={handleClose}
+            disabled={isLoading}
             sx={{
               color: "white",
               bgcolor: alpha("#fff", 0.1),
@@ -631,7 +700,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   label="Adresse email"
                   type="email"
                   value={form.email}
-                  onChange={(e) => handleChange("email", e.target.value)}
+                  disabled // 🔥 Email non modifiable
                   fullWidth
                   InputProps={{
                     startAdornment: (
@@ -734,13 +803,56 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       )}`,
                     }}
                   >
+                    {/* 🔥 ANCIEN MOT DE PASSE */}
+                    <TextField
+                      label="Ancien mot de passe"
+                      type={showOldPassword ? "text" : "password"}
+                      value={form.oldPassword}
+                      autoComplete="current-password"
+                      onChange={(e) => handleChange("oldPassword", e.target.value)}
+                      fullWidth
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <Lock sx={{ color: theme.palette.error.main }} />
+                          </InputAdornment>
+                        ),
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton
+                              onClick={() => setShowOldPassword((p) => !p)}
+                              edge="end"
+                              sx={{
+                                color: showOldPassword
+                                  ? theme.palette.primary.main
+                                  : theme.palette.text.secondary,
+                              }}
+                            >
+                              {showOldPassword ? (
+                                <VisibilityOff />
+                              ) : (
+                                <Visibility />
+                              )}
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      }}
+                      sx={{
+                        "& .MuiOutlinedInput-root": {
+                          borderRadius: 2.5,
+                          bgcolor: "white",
+                        },
+                      }}
+                    />
+
+                    {/* NOUVEAU MOT DE PASSE */}
                     <TextField
                       label="Nouveau mot de passe"
                       type={showPassword ? "text" : "password"}
                       value={form.password}
                       autoComplete="new-password"
                       onChange={(e) => handleChange("password", e.target.value)}
-                      helperText="Laissez vide pour conserver l'ancien"
+                      helperText="Minimum 6 caractères"
                       fullWidth
                       InputProps={{
                         startAdornment: (
@@ -776,6 +888,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       }}
                     />
 
+                    {/* CONFIRMER MOT DE PASSE */}
                     <TextField
                       label="Confirmer le mot de passe"
                       type={showConfirmPassword ? "text" : "password"}
@@ -853,7 +966,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 onClick={() => {
                   setShowEdit(false);
                   setShowEditMdp(false);
+                  setForm((prev) => ({
+                    ...prev,
+                    oldPassword: "",
+                    password: "",
+                    confirmPassword: "",
+                  }));
                 }}
+                disabled={isLoading}
                 variant="outlined"
                 sx={{
                   borderRadius: 2.5,

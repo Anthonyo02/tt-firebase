@@ -60,7 +60,7 @@ interface StatusConfig {
 
 const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   const theme = useTheme();
-  const { user, logout } = useAuth();
+  const {  logout } = useAuth();
   const { mode, toggleTheme } = useAppTheme();
   const { status } = useConnectionStatus();
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -23,7 +23,15 @@ import {
 import { Edit, Close } from "@mui/icons-material";
 import { TransitionProps } from "@mui/material/transitions";
 
-// 🔥 Import du Contexte
+// 🔥 Firebase Auth
+import {
+  getAuth,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword,
+} from "firebase/auth";
+
+// 🔥 Context Firestore
 import { useData } from "@/context/DataContext";
 
 interface User {
@@ -40,7 +48,7 @@ interface EditUserModalProps {
   onSave: (user: User) => void;
 }
 
-// Transition pour le Dialog
+// Transition
 const Transition = React.forwardRef(function Transition(
   props: TransitionProps & { children: React.ReactElement },
   ref: React.Ref<unknown>
@@ -54,29 +62,30 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
   onClose,
   onSave,
 }) => {
-  // 🔥 Récupération des fonctions du contexte
   const { updateUser, fetchUsers } = useData();
 
   const [form, setForm] = useState({
-    id: user.id,
-    nom: user.nom,
-    email: user.email,
-    role: user.role,
-    password: "",
+    id: "",
+    nom: "",
+    email: "",
+    role: "",
+    oldPassword: "",
+    newPassword: "",
   });
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Ré-initialiser le formulaire quand l'user ou l'ouverture du modal change
+  // 🔄 Init
   useEffect(() => {
-    if (user) {
+    if (user && open) {
       setForm({
         id: user.id,
         nom: user.nom,
         email: user.email,
         role: user.role,
-        password: "",
+        oldPassword: "",
+        newPassword: "",
       });
       setError("");
     }
@@ -87,10 +96,10 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
     setError("");
   };
 
-  // 🔥 Logique mise à jour avec LocalForage via Context
+  // 💾 SAVE
   const save = async () => {
-    if (!form.id || !form.nom || !form.email || !form.role) {
-      setError("Veuillez remplir tous les champs obligatoires.");
+    if (!form.nom || !form.role) {
+      setError("Veuillez remplir les champs obligatoires.");
       return;
     }
 
@@ -98,41 +107,54 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
     setError("");
 
     try {
-      const payload: any = {
-        nom: form.nom,
-        email: form.email,
-        role: form.role,
-      };
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
 
-      // Ne mettre à jour le mot de passe que s'il a été saisi
-      if (form.password) {
-        payload.password = form.password; 
+      if (!currentUser) {
+        throw new Error("Utilisateur non connecté.");
       }
 
-      console.log("💾 Mise à jour de l'utilisateur...");
-      
-      // 1. Mise à jour dans Firestore via le Contexte
-      await updateUser(form.id, payload);
+      /* 🔐 CHANGEMENT MOT DE PASSE */
+      if (form.oldPassword || form.newPassword) {
+        if (!form.oldPassword || !form.newPassword) {
+          throw new Error("Les deux mots de passe sont requis.");
+        }
 
-      // 2. SYNCHRONISATION AVEC LOCALFORAGE
-      // On force le fetch pour récupérer les données serveur et mettre à jour le cache local
-      console.log("🔄 Synchronisation avec LocalForage...");
+        const credential = EmailAuthProvider.credential(
+          currentUser.email!,
+          form.oldPassword
+        );
+
+        await reauthenticateWithCredential(currentUser, credential);
+        await updatePassword(currentUser, form.newPassword);
+      }
+
+      /* 🗂️ UPDATE FIRESTORE */
+      await updateUser(form.id, {
+        nom: form.nom,
+        role: form.role,
+      });
+
       await fetchUsers();
 
-      const updatedUser: User = {
+      onSave({
         id: form.id,
         nom: form.nom,
         email: form.email,
         role: form.role,
-      };
+      });
 
-      // Notifier le parent + fermer
-      onSave(updatedUser);
       onClose();
-
     } catch (err: any) {
-      console.error("❌ Erreur update user:", err);
-      setError("Erreur lors de la mise à jour de l'utilisateur.");
+      console.error(err);
+
+      if (err.code === "auth/wrong-password") {
+        setError("Ancien mot de passe incorrect.");
+      } else if (err.code === "auth/weak-password") {
+        setError("Mot de passe trop faible (6 caractères minimum).");
+      } else {
+        setError(err.message || "Erreur lors de la mise à jour.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -142,116 +164,52 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
     <Dialog
       open={open}
       onClose={!isLoading ? onClose : undefined}
-      maxWidth="sm"
       fullWidth
+      maxWidth="sm"
       TransitionComponent={Transition}
-      PaperProps={{
-        sx: {
-          borderRadius: 4,
-          overflow: "hidden",
-          boxShadow: 6,
-        },
-      }}
     >
-      {/* HEADER AVEC GRADIENT */}
+      {/* HEADER */}
       <Box
         sx={{
           background:
             "linear-gradient(135deg, #818660 0%, #9ba17b 50%, #6b7052 100%)",
+          p: 3,
           position: "relative",
-          overflow: "hidden",
-          py: 3,
-          px: 3,
         }}
       >
-        <Box
-          sx={{
-            position: "absolute",
-            width: 260,
-            height: 260,
-            borderRadius: "50%",
-            bgcolor: "rgba(255,255,255,0.08)",
-            top: -80,
-            right: -40,
-          }}
-        />
-        <Box
-          sx={{
-            position: "absolute",
-            width: 130,
-            height: 130,
-            borderRadius: "50%",
-            bgcolor: "rgba(255,255,255,0.06)",
-            bottom: -30,
-            left: "25%",
-          }}
-        />
-
         <IconButton
           onClick={onClose}
           disabled={isLoading}
-          sx={{
-            position: "absolute",
-            right: 12,
-            top: 12,
-            color: "white",
-            bgcolor: "rgba(0,0,0,0.18)",
-            "&:hover": {
-              bgcolor: "rgba(0,0,0,0.28)",
-            },
-          }}
+          sx={{ position: "absolute", top: 8, right: 8, color: "white" }}
         >
           <Close />
         </IconButton>
 
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-          <Avatar
-            sx={{
-              bgcolor: "rgba(255,255,255,0.25)",
-              width: 52,
-              height: 52,
-              boxShadow: "0 4px 10px rgba(0,0,0,0.25)",
-            }}
-          >
+        <Box display="flex" gap={2} alignItems="center">
+          <Avatar sx={{ bgcolor: "rgba(255,255,255,0.3)" }}>
             <Edit />
           </Avatar>
-
           <Box>
-            <Typography variant="h6" fontWeight={700} color="white">
-              Modifier l'utilisateur
+            <Typography color="white" fontWeight={700}>
+              Modifier le profil
             </Typography>
-            <Typography variant="body2" color="rgba(255,255,255,0.85)">
-              Mise à jour des informations du compte
+            <Typography color="rgba(255,255,255,0.8)" variant="body2">
+              Informations & sécurité
             </Typography>
           </Box>
         </Box>
       </Box>
 
-      {/* CONTENU */}
-      <DialogContent
-        sx={{
-          bgcolor: (theme) =>
-            theme.palette.mode === "light" ? "grey.50" : "background.default",
-          p: 3,
-        }}
-      >
+      {/* CONTENT */}
+      <DialogContent sx={{ p: 3 }}>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
             {error}
           </Alert>
         )}
 
-        <Paper
-          elevation={0}
-          sx={{
-            p: 3,
-            borderRadius: 3,
-            bgcolor: "background.paper",
-            border: "1px solid",
-            borderColor: "divider",
-          }}
-        >
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <Paper sx={{ p: 3, borderRadius: 3 }}>
+          <Box display="flex" flexDirection="column" gap={2}>
             <TextField
               label="Nom"
               value={form.nom}
@@ -261,19 +219,9 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
 
             <TextField
               label="Email"
-              type="email"
               value={form.email}
-              onChange={(e) => handleChange("email", e.target.value)}
+              disabled
               fullWidth
-            />
-
-            <TextField
-              label="Nouveau mot de passe (optionnel)"
-              type="password"
-              value={form.password}
-              onChange={(e) => handleChange("password", e.target.value)}
-              fullWidth
-              helperText="Laissez vide pour garder l'ancien mot de passe"
             />
 
             <FormControl fullWidth>
@@ -283,25 +231,46 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
                 label="Rôle"
                 onChange={(e) => handleChange("role", e.target.value)}
               >
-                <MenuItem value="employer">Employé</MenuItem>
                 <MenuItem value="admin">Administrateur</MenuItem>
+                <MenuItem value="employer">Employé</MenuItem>
               </Select>
             </FormControl>
+
+            {/* 🔐 SÉCURITÉ */}
+            <TextField
+              label="Ancien mot de passe"
+              type="password"
+              value={form.oldPassword}
+              onChange={(e) =>
+                handleChange("oldPassword", e.target.value)
+              }
+              fullWidth
+            />
+
+            <TextField
+              label="Nouveau mot de passe"
+              type="password"
+              value={form.newPassword}
+              onChange={(e) =>
+                handleChange("newPassword", e.target.value)
+              }
+              fullWidth
+              helperText="Laissez vide si vous ne voulez pas changer"
+            />
           </Box>
         </Paper>
       </DialogContent>
 
       {/* ACTIONS */}
-      <DialogActions sx={{ p: 3, pt: 2 }}>
+      <DialogActions sx={{ p: 3 }}>
         <Button onClick={onClose} disabled={isLoading} variant="outlined">
           Annuler
         </Button>
         <Button
-          variant="contained"
           onClick={save}
           disabled={isLoading}
-          startIcon={!isLoading ? <Edit /> : undefined}
-          sx={{ minWidth: 130 }}
+          variant="contained"
+          startIcon={!isLoading && <Edit />}
         >
           {isLoading ? (
             <CircularProgress size={20} color="inherit" />

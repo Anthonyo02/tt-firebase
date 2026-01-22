@@ -60,6 +60,7 @@ import {
   Chip,
 } from "@mui/material";
 import { About } from "./preview/About";
+import ShowEditAbout from "../modals/ShowEditAbout";
 
 // --- Types ---
 interface Feature {
@@ -576,53 +577,76 @@ export default function AboutPreview() {
     >
       {/* ========== TABS HEADER ========== */}
       <Box
-        sx={{ maxWidth: 1400, mx: "auto", px: { xs: 2, md: 4 } }}
+        sx={{
+          width: "100%",
+          maxWidth: 1400,
+          mx: "auto",
+          // Un peu de padding vertical sur mobile pour aérer
+          pt: { xs: 1, md: 0 },
+          px: { xs: 1, md: 4 },
+        }}
         bgcolor={"#616637"}
       >
-        <Tabs
-          value={tabValue}
-          onChange={(_, v) => setTabValue(v)}
-          sx={{
-            "& .MuiTabs-indicator": {
-              height: 5,
-              borderRadius: "3px 3px 0 0",
-              background: "white",
-            },
-            "& .MuiTab-root": {
-              textTransform: "none",
-              fontWeight: 600,
-              fontSize: { xs: "0.875rem", md: "1rem" },
-              minHeight: 64,
-              color: "white",
-              "&.Mui-selected": { color: "white" },
-            },
-          }}
-        >
-          <Tab
-            icon={<PreviewIcon sx={{ fontSize: 20 }} />}
-            iconPosition="start"
-            label={isMobile ? "Aperçu" : "Aperçu du site"}
-          />
-          <Tab
-            icon={
-              <Badge
-                // badgeContent={pendingCount}
-                sx={{
-                  "& .MuiBadge-badge": {
-                    background: "THEME.secondary.gradient",
-                    color: "white",
-                  },
-                }}
-              >
-                <EditIcon sx={{ fontSize: 20 }} />
-              </Badge>
-            }
-            iconPosition="start"
-            label={isMobile ? "Éditeur" : "Éditeur Visuel"}
-          />
-        </Tabs>
+        <Grid container alignItems="center">
+          {" "}
+          {/* Ajout de alignItems center */}
+          {/* ZONE TABS : Prend plus de place sur mobile pour le scroll */}
+          <Grid item xs={9} sm={8} md={9}>
+            <Tabs
+              value={tabValue}
+              onChange={(_, v) => setTabValue(v)}
+              variant="scrollable" // IMPORTANT: Permet le scroll horizontal sur petit mobile
+              scrollButtons="auto"
+              allowScrollButtonsMobile
+              sx={{
+                minHeight: { xs: 50, md: 64 }, // Hauteur réduite sur mobile
+                "& .MuiTabs-indicator": {
+                  height: 4,
+                  borderRadius: "3px 3px 0 0",
+                  background: "white",
+                },
+                "& .MuiTab-root": {
+                  textTransform: "none",
+                  fontWeight: 600,
+                  fontSize: { xs: "0.8rem", md: "1rem" },
+                  minHeight: { xs: 50, md: 64 },
+                  color: "rgba(255,255,255, 0.7)",
+                  padding: { xs: "12px 10px", md: "12px 16px" }, // Moins de padding sur mobile
+                  "&.Mui-selected": { color: "white" },
+                },
+              }}
+            >
+              <Tab
+                icon={<PreviewIcon sx={{ fontSize: { xs: 18, md: 20 } }} />}
+                iconPosition="start"
+                label={isMobile ? "Aperçu" : "Aperçu du site"}
+              />
+              <Tab
+                icon={
+                  <Badge
+                    // badgeContent={pendingCount}
+                    sx={{
+                      "& .MuiBadge-badge": {
+                        // background: "THEME.secondary.gradient", // Décommentez si vous avez accès au thème
+                        background: "#ff4444",
+                        color: "white",
+                      },
+                    }}
+                  >
+                    <EditIcon sx={{ fontSize: { xs: 18, md: 20 } }} />
+                  </Badge>
+                }
+                iconPosition="start"
+                label={isMobile ? "Éditeur" : "Éditeur Visuel"}
+              />
+            </Tabs>
+          </Grid>
+          {/* ZONE BOUTON : S'adapte à droite */}
+          <Grid item xs={3} sm={4} md={3}>
+            <ShowEditAbout />
+          </Grid>
+        </Grid>
       </Box>
-
       {/* ========== VUE APERÇU ========== */}
       {tabValue === 0 && (
         <Box

@@ -36,10 +36,11 @@ import {
 import EditUserModal from "./EditUserModal";
 import ConfirmDialog from "./ConfirmDialog";
 
-// 🔥 Import du Contexte (C'est lui qui détient la vérité : LocalForage + Firebase)
+// 🔥 Import du Contexte
 import { useData } from "@/context/DataContext";
+import { getAuth } from "firebase/auth";
 
-// Interface locale pour l'affichage (doit correspondre à ce que renvoie le contexte)
+// ✅ Interface User
 interface User {
   id: string;
   nom: string;
@@ -61,8 +62,7 @@ const UsersListModal: React.FC<UsersListModalProps> = ({
   onClose,
   openCreate,
 }) => {
-  // ✅ On récupère les users et la fonction de suppression depuis le contexte
-  const { users, deleteUser: contextDeleteUser } = useData();
+  const { users, deleteUser: contextDeleteUser, fetchUsers } = useData();
 
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -71,7 +71,6 @@ const UsersListModal: React.FC<UsersListModalProps> = ({
   const [deleteUser, setDeleteUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Couleurs pour les avatars
   const avatarColors = [
     "#1976d2", "#388e3c", "#f57c00", "#7b1fa2",
     "#c2185b", "#0097a7", "#5d4037", "#455a64",
@@ -91,23 +90,11 @@ const UsersListModal: React.FC<UsersListModalProps> = ({
       .slice(0, 2);
   };
 
-  /* =========================
-     🔥 TRI AUTOMATIQUE
-     On trie dès que la liste 'users' du contexte change
-  ========================== */
   const sortedUsers = useMemo(() => {
-    // On force le typage ici pour matcher l'interface locale si besoin
-    const list = users as unknown as User[];
-    return [...list].sort((a, b) => {
-      const dateA = a.createdAt || 0;
-      const dateB = b.createdAt || 0;
-      return dateB - dateA; // Plus récent en premier
-    });
+    const list = users as User[];
+    return [...list].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   }, [users]);
 
-  /* =========================
-     🔍 FILTRE DE RECHERCHE
-  ========================== */
   useEffect(() => {
     if (searchQuery.trim() === "") {
       setFilteredUsers(sortedUsers);
@@ -121,25 +108,51 @@ const UsersListModal: React.FC<UsersListModalProps> = ({
     }
   }, [searchQuery, sortedUsers]);
 
-  /* =========================
-     🗑️ SUPPRESSION VIA CONTEXTE
-  ========================== */
-  const handleDelete = async () => {
-    if (!deleteUser) return;
-    setIsLoading(true);
-    try {
-      // On appelle la fonction du contexte qui gère déjà Firebase + LocalForage
-      await contextDeleteUser(deleteUser.id);
-      setDeleteUser(null);
-    } catch (err: any) {
-      console.error(err);
-      setError("Erreur lors de la suppression");
-    } finally {
-      setIsLoading(false);
+  // 🔹 Suppression Firestore + Firebase Auth
+const handleDelete = async () => {
+  if (!deleteUser) return;
+  setIsLoading(true);
+  try {
+    // 1. Récupérer le token de l'admin connecté
+    const auth = getAuth();
+    const currentUser = auth.currentUser;
+    
+    if (!currentUser) {
+      throw new Error("Vous devez être connecté pour effectuer cette action.");
     }
+
+    const token = await currentUser.getIdToken();
+
+    // 2. Appel à l'API avec le token
+    const response = await fetch("/api/users/delete", {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}` // Ajout du header Authorization
+      },
+      body: JSON.stringify({ uid: deleteUser.id }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Erreur lors de la suppression");
+
+    // Mettre à jour le contexte
+    await fetchUsers();
+    setDeleteUser(null);
+  } catch (err: any) {
+    console.error(err);
+    setError(err.message || "Erreur lors de la suppression");
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+  const handleUserUpdated = async (updatedUser: User) => {
+    console.log("✅ Utilisateur mis à jour:", updatedUser);
+    await fetchUsers();
+    setEditUser(null);
   };
 
-  // Stats
   const adminCount = sortedUsers.filter((u) => u.role === "admin").length;
   const employeeCount = sortedUsers.filter((u) => u.role !== "admin").length;
 
@@ -282,7 +295,11 @@ const UsersListModal: React.FC<UsersListModalProps> = ({
         {/* ===== CONTENT ===== */}
         <DialogContent sx={{ p: 0 }}>
           {error && (
-            <Alert severity="error" sx={{ m: 2, borderRadius: 2 }}>
+            <Alert
+              severity="error"
+              sx={{ m: 2, borderRadius: 2 }}
+              onClose={() => setError("")}
+            >
               {error}
             </Alert>
           )}
@@ -471,21 +488,13 @@ const UsersListModal: React.FC<UsersListModalProps> = ({
         </DialogActions>
       </Dialog>
 
-      {/* ===== EDIT MODAL ===== */}
-      {/* 
-         Le composant EditUserModal (corrigé précédemment) utilise lui aussi useData.
-         On n'a plus besoin de onSave complexe ici, car le contexte se mettra à jour
-         automatiquement, ce qui mettra à jour 'users' dans ce composant et re-rendra la liste.
-      */}
+      {/* ===== ✅ EDIT MODAL ===== */}
       {editUser && (
         <EditUserModal
-          open
-          user={editUser as any} // Cast si légère différence de typage
+          open={true}
+          user={editUser}
           onClose={() => setEditUser(null)}
-          onSave={() => {
-             // La mise à jour est gérée par le contexte, on ferme juste
-             setEditUser(null);
-          }}
+          onSave={handleUserUpdated}
         />
       )}
 

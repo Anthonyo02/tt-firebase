@@ -9,7 +9,7 @@ interface ProtectedLayoutProps {
   children: React.ReactNode;
 }
 
-const ProtectedLayout: React.FC<ProtectedLayoutProps> = ({ children }) => {
+const ProtectedRoute: React.FC<ProtectedLayoutProps> = ({ children }) => {
   const { user, isLoading } = useAuth();
   const router = useRouter();
 
@@ -26,4 +26,4 @@ const ProtectedLayout: React.FC<ProtectedLayoutProps> = ({ children }) => {
   return <Layout>{children}</Layout>;
 };
 
-export default ProtectedLayout;
+export default ProtectedRoute;
