@@ -373,9 +373,22 @@ export default function SiteWeb() {
   }
 
   return (
-    <Box sx={{ width: "100%", minHeight: "100vh" }}    boxShadow="0 4px 12px rgba(0, 0, 0, 0.3)" borderRadius={3} overflow={"hidden"}>
+    <Box
+      sx={{ width: "100%" }}
+      // border={"red solid 2px"}
+      boxShadow="0 4px 12px rgba(0, 0, 0, 0.3)"
+      borderRadius={3}
+      overflow={"hidden"}
+    >
       {/* TABS HEADER */}
-      <Box sx={{ maxWidth: 1400, mx: "auto", px: { xs: 0, md: 4 } }} bgcolor={"#616637"}>
+      <Box
+        sx={{
+          maxWidth: 1400,
+          mx: "auto",
+          px: { xs: 0, md: 4 },
+          bgcolor: "#616637",
+        }}
+      >
         <Tabs
           value={tabValue}
           onChange={(_, v) => setTabValue(v)}
@@ -429,7 +442,7 @@ export default function SiteWeb() {
           sx={{
             display: "flex",
             flexDirection: "column",
-            height: "calc(100vh - 72px)",
+            height: { xs: "auto", md: "calc(100vh - 72px)" },
           }}
         >
           {/* 1. TOP BAR: SÉLECTEUR DE SLIDES (Horizontal) */}
@@ -505,7 +518,10 @@ export default function SiteWeb() {
           </Paper>
 
           {/* 2. MAIN AREA: GRID SPLIT */}
-          <Box sx={{ flex: 1, overflow: "hidden", p: 3 }} bgcolor={"secondary"}>
+          <Box
+            sx={{ flex: 1, p: { xs: 1, sm: 6 }, overflow: "hidden" }}
+            bgcolor={"secondary"}
+          >
             {selectedSlide ? (
               <Grid container spacing={4} sx={{ height: "100%" }}>
                 {/* COLONNE GAUCHE: PRÉVISUALISATION FIXE */}
@@ -533,13 +549,13 @@ export default function SiteWeb() {
                     elevation={4}
                     sx={{
                       flex: 1,
-                      borderRadius: 4,
+                      borderRadius: { xs: 0, sm: 4 },
                       overflow: "hidden",
                       position: "relative",
                       border: "4px solid white",
                     }}
                   >
-                    <Box sx={{ position: "absolute", inset: 0 }}>
+                    <Box>
                       <img
                         src={selectedSlide.image}
                         alt="bg"
@@ -563,7 +579,7 @@ export default function SiteWeb() {
                       sx={{
                         position: "absolute",
                         inset: 0,
-                        p: 6,
+                        p: { xs: 2, sm: 5 },
                         display: "flex",
                         alignItems: "center",
                         color: "white",
@@ -593,7 +609,7 @@ export default function SiteWeb() {
                         <Typography variant="h6" sx={{ opacity: 0.9, mb: 3 }}>
                           {selectedSlide.subtitle}
                         </Typography>
-                        <Stack direction="row" spacing={2}>
+                        <Stack direction="row" spacing={{ xs: 1, sm: 3 }}>
                           {selectedSlide.ctas.map((cta, i) => (
                             <Button
                               key={i}
@@ -961,7 +977,7 @@ export default function SiteWeb() {
                     <Box sx={{ height: 20 }} /> {/* Spacer */}
                     <Button
                       variant="contained"
-                      color="success"
+                      // color="success"
                       size="large"
                       startIcon={
                         savingId === selectedSlide.id ? (
@@ -973,7 +989,7 @@ export default function SiteWeb() {
                       onClick={() => handleSaveSlide(selectedSlide.id)}
                       disabled={savingId === selectedSlide.id}
                       fullWidth
-                      sx={{ py: 1.5, borderRadius: 2 }}
+                      sx={{ py: 1.5, borderRadius: 2 ,color:"white",  bgcolor:"#616637"}}
                     >
                       Enregistrer le slide
                     </Button>

@@ -1198,11 +1198,11 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
           gap: 1.5,
         }}
       >
-        <Box sx={{ flexGrow: 1 }}>
+        {/* <Box sx={{ flexGrow: 1 }}>
           <Typography variant="caption" color="text.secondary">
             💡 Toutes les modifications sont prévisualisées en temps réel
           </Typography>
-        </Box>
+        </Box> */}
         <Button
           onClick={onClose}
           variant="outlined"

@@ -2,7 +2,16 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Play, X, ArrowRight, Filter, Video, Camera, Calendar, Loader2 } from "lucide-react";
+import {
+  Play,
+  X,
+  ArrowRight,
+  Filter,
+  Video,
+  Camera,
+  Calendar,
+  Loader2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 // Firebase Imports
 import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { Grid } from "@mui/material";
 
 // --- Utility Functions pour YouTube ---
 const getYouTubeVideoId = (url: string) => {
@@ -21,7 +31,9 @@ const getYouTubeVideoId = (url: string) => {
 
 const getYouTubeThumbnail = (url: string) => {
   const videoId = getYouTubeVideoId(url);
-  return videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : "/placeholder.svg";
+  return videoId
+    ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
+    : "/placeholder.svg";
 };
 
 // --- Interfaces (correspondant à ton Editor) ---
@@ -53,7 +65,7 @@ const categories = [
   { id: "all", label: "Tout", icon: Filter, color: "primary" },
   { id: "video", label: "Vidéo", icon: Video, color: "tertiary" },
   { id: "photo", label: "Photo", icon: Camera, color: "accent-warm" },
-  // J'ai gardé 'event' au cas où tu voudrais filtrer par client plus tard, 
+  // J'ai gardé 'event' au cas où tu voudrais filtrer par client plus tard,
   // mais par défaut tes photos venant de l'éditeur seront 'photo'
   // { id: "event", label: "Événement", icon: Calendar, color: "primary" },
 ];
@@ -76,18 +88,18 @@ export default function Realisation() {
     const unsubscribe = onSnapshot(docRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
-        
+
         // Transformation des Vidéos
         const loadedVideos = (data.videos || []).map((v: any) => ({
           ...v,
           category: "video", // On force la catégorie pour le filtre
-          thumbnail: getYouTubeThumbnail(v.videoUrl) // On génère la thumb depuis l'URL
+          thumbnail: getYouTubeThumbnail(v.videoUrl), // On génère la thumb depuis l'URL
         }));
 
         // Transformation des Photos
         const loadedPhotos = (data.photos || []).map((p: any) => ({
           ...p,
-          category: "photo" // On force la catégorie pour le filtre
+          category: "photo", // On force la catégorie pour le filtre
         }));
 
         setVideos(loadedVideos);
@@ -102,12 +114,16 @@ export default function Realisation() {
   // --- Logique de filtrage ---
   const filteredVideos =
     selectedCategory === "all" || selectedCategory === "video"
-      ? videos.filter((v) => selectedCategory === "all" || v.category === selectedCategory)
+      ? videos.filter(
+          (v) => selectedCategory === "all" || v.category === selectedCategory,
+        )
       : [];
 
   const filteredPhotos =
     selectedCategory === "all" || selectedCategory !== "video"
-      ? photos.filter((p) => selectedCategory === "all" || p.category === selectedCategory)
+      ? photos.filter(
+          (p) => selectedCategory === "all" || p.category === selectedCategory,
+        )
       : [];
 
   // --- Affichage Chargement ---
@@ -123,37 +139,47 @@ export default function Realisation() {
     <>
       {/* Filters */}
       <section className="border-b border-border bg-secondary/30 py-6">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium transition-colors ${
-                  selectedCategory === cat.id
-                    ? cat.color === "primary"
-                      ? "bg-primary text-primary-foreground"
-                      : cat.color === "tertiary"
-                        ? "bg-tertiary text-white"
-                        : "bg-accent-warm text-white"
-                    : "bg-card text-muted-foreground hover:bg-accent-neutral"
-                }`}
-              >
-                <cat.icon className="h-4 w-4" />
-                {cat.label}
-              </button>
-            ))}
-          </div>
+        <div className="container mx-auto">
+            <Grid
+              container
+              display="flex"
+              flexWrap="wrap"
+              alignItems="center"
+              justifyContent="center"
+              gap={2}
+            >
+              {" "}
+              {categories.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setSelectedCategory(cat.id)}
+                  className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium transition-colors ${
+                    selectedCategory === cat.id
+                      ? cat.color === "primary"
+                        ? "bg-primary text-primary-foreground"
+                        : cat.color === "tertiary"
+                          ? "bg-tertiary text-white"
+                          : "bg-accent-warm text-white"
+                      : "bg-card text-muted-foreground hover:bg-accent-neutral"
+                  }`}
+                >
+                  <cat.icon className="h-4 w-4" />
+                  {cat.label}
+                </button>
+              ))}
+            </Grid>
         </div>
       </section>
 
       {/* Videos Section */}
       {filteredVideos.length > 0 && (
-        <section className="py-4 bg-accent-neutral/20" >
+        <section className="py-4 bg-accent-neutral/20">
           <div className="container mx-auto px-4">
             <div className="mb-8 flex items-center gap-3">
               <Video className="h-6 w-6 text-tertiary" />
-              <h2 className="font-heading text-2xl font-bold text-foreground">Vidéos</h2>
+              <h2 className="font-heading text-2xl font-bold text-foreground">
+                Vidéos
+              </h2>
             </div>
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
               {filteredVideos.map((video) => (
@@ -173,7 +199,9 @@ export default function Realisation() {
                     </div>
                   </div>
                   <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-foreground/90 to-transparent p-4">
-                    <p className="font-medium text-white line-clamp-1">{video.title}</p>
+                    <p className="font-medium text-white line-clamp-1">
+                      {video.title}
+                    </p>
                     <p className="mt-1 text-xs text-white/70">{video.client}</p>
                   </div>
                 </button>
@@ -185,11 +213,15 @@ export default function Realisation() {
 
       {/* Photos Section */}
       {filteredPhotos.length > 0 && (
-        <section className={`pb-8 ${filteredVideos.length > 0 ? "bg-secondary/20" : ""}`} >
+        <section
+          className={`pb-8 ${filteredVideos.length > 0 ? "bg-secondary/20" : ""}`}
+        >
           <div className="container mx-auto px-4">
             <div className="mb-8 flex items-center gap-3">
               <Camera className="h-6 w-6 text-accent-warm" />
-              <h2 className="font-heading text-2xl font-bold text-foreground">Photographies</h2>
+              <h2 className="font-heading text-2xl font-bold text-foreground">
+                Photographies
+              </h2>
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {filteredPhotos.map((photo, index) => (
@@ -210,8 +242,12 @@ export default function Realisation() {
                       >
                         {photo.category}
                       </Badge>
-                      <p className="font-medium text-white line-clamp-1">{photo.title}</p>
-                      <p className="mt-1 text-xs text-white/70">{photo.client}</p>
+                      <p className="font-medium text-white line-clamp-1">
+                        {photo.title}
+                      </p>
+                      <p className="mt-1 text-xs text-white/70">
+                        {photo.client}
+                      </p>
                     </div>
                   </div>
                 </button>
@@ -222,9 +258,14 @@ export default function Realisation() {
       )}
 
       {/* Video Modal (avec Iframe YouTube) */}
-      <Dialog open={!!selectedVideo} onOpenChange={() => setSelectedVideo(null)}>
+      <Dialog
+        open={!!selectedVideo}
+        onOpenChange={() => setSelectedVideo(null)}
+      >
         <DialogContent className="max-w-4xl bg-card p-0 overflow-hidden">
-          <DialogTitle className="sr-only">{selectedVideo?.title || "Vidéo"}</DialogTitle>
+          <DialogTitle className="sr-only">
+            {selectedVideo?.title || "Vidéo"}
+          </DialogTitle>
           <div className="relative">
             <button
               onClick={() => setSelectedVideo(null)}
@@ -252,8 +293,12 @@ export default function Realisation() {
             </div>
             {selectedVideo && (
               <div className="p-6">
-                <h3 className="font-heading text-xl font-semibold text-foreground">{selectedVideo.title}</h3>
-                <p className="mt-2 text-muted-foreground">{selectedVideo.description}</p>
+                <h3 className="font-heading text-xl font-semibold text-foreground">
+                  {selectedVideo.title}
+                </h3>
+                <p className="mt-2 text-muted-foreground">
+                  {selectedVideo.description}
+                </p>
                 <div className="mt-4 flex items-center gap-4 text-sm text-muted-foreground">
                   <Badge variant="outline">{selectedVideo.client}</Badge>
                   <span className="flex items-center gap-1">
@@ -267,9 +312,14 @@ export default function Realisation() {
       </Dialog>
 
       {/* Photo Modal */}
-      <Dialog open={!!selectedPhoto} onOpenChange={() => setSelectedPhoto(null)}>
+      <Dialog
+        open={!!selectedPhoto}
+        onOpenChange={() => setSelectedPhoto(null)}
+      >
         <DialogContent className="max-w-4xl bg-card p-0 overflow-hidden">
-          <DialogTitle className="sr-only">{selectedPhoto?.title || "Photo"}</DialogTitle>
+          <DialogTitle className="sr-only">
+            {selectedPhoto?.title || "Photo"}
+          </DialogTitle>
           <div className="relative">
             <button
               onClick={() => setSelectedPhoto(null)}
@@ -287,8 +337,12 @@ export default function Realisation() {
                   />
                 </div>
                 <div className="p-6">
-                  <h3 className="font-heading text-xl font-semibold text-foreground">{selectedPhoto.title}</h3>
-                  <p className="mt-2 text-muted-foreground">{selectedPhoto.description}</p>
+                  <h3 className="font-heading text-xl font-semibold text-foreground">
+                    {selectedPhoto.title}
+                  </h3>
+                  <p className="mt-2 text-muted-foreground">
+                    {selectedPhoto.description}
+                  </p>
                   <div className="mt-4 flex items-center gap-4 text-sm text-muted-foreground">
                     <Badge variant="secondary">{selectedPhoto.client}</Badge>
                     <span className="flex items-center gap-1">

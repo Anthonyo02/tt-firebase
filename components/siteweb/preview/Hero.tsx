@@ -164,7 +164,7 @@ export function HeroCarousel() {
   }
 
   return (
-    <section className="relative h-[600px] overflow-hidden md:h-[700px]" >
+    <section className="relative h-[600px] overflow-hidden md:h-[700px]">
       {/* Slides */}
       {slides.map((slide, index) => {
         // Récupérer le composant icône dynamiquement
@@ -178,7 +178,6 @@ export function HeroCarousel() {
                 ? "opacity-100"
                 : "opacity-0 pointer-events-none"
             }`}
-            
           >
             {/* Background Image */}
             <div
@@ -199,8 +198,7 @@ export function HeroCarousel() {
             </div>
 
             {/* Content */}
-     <div className="container relative mx-auto flex h-full items-center pl-10 sm:pl-20">
-
+           <div className="container relative mx-auto flex h-full items-center pl-2 sm:pl-10 md:pl-20">
 
               <div className="max-w-2xl space-y-6">
                 {/* Icône dynamique */}

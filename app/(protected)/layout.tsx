@@ -1,9 +1,11 @@
+// app/(protected)/layout.tsx
 "use client";
 
 import { useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import LoadingPage from "@/components/LoadingPage";
+import Layout from "@/components/layout/Layout";
 
 export default function ProtectedLayout({
   children,
@@ -23,5 +25,6 @@ export default function ProtectedLayout({
     return <LoadingPage />;
   }
 
-  return <>{children}</>;
+  // 👇 WRAP AVEC TON LAYOUT
+  return <Layout>{children}</Layout>;
 }

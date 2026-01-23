@@ -155,7 +155,6 @@
 import { useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
-import Layout from "@/components/Layout";
 import LoadingPage from "@/components/LoadingPage";
 
 export default function ProtectedLayout({
@@ -176,5 +175,5 @@ export default function ProtectedLayout({
     return <LoadingPage />;
   }
 
-  return <Layout>{children}</Layout>;
+  return <>{children}</>;
 }

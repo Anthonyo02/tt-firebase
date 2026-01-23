@@ -3,13 +3,12 @@
 import React from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "next/navigation";
-import Layout from "./Layout"; // ton Header + Sidebar
 
 interface ProtectedLayoutProps {
   children: React.ReactNode;
 }
 
-const ProtectedRoute: React.FC<ProtectedLayoutProps> = ({ children }) => {
+const ProtectedLayout: React.FC<ProtectedLayoutProps> = ({ children }) => {
   const { user, isLoading } = useAuth();
   const router = useRouter();
 
@@ -23,7 +22,7 @@ const ProtectedRoute: React.FC<ProtectedLayoutProps> = ({ children }) => {
   }
 
   // 🔹 User connecté → affiche le layout complet
-  return <Layout>{children}</Layout>;
+  return <>{children}</>;
 };
 
-export default ProtectedRoute;
+export default ProtectedLayout;

@@ -570,7 +570,7 @@ export default function AboutPreview() {
   // ============================================
   return (
     <Box
-      sx={{ width: "100%", minHeight: "100vh" }}
+      sx={{ width: "100%" }}
       boxShadow="0 4px 12px rgba(0, 0, 0, 0.3)"
       overflow={"hidden"}
       borderRadius={3}
@@ -821,7 +821,7 @@ export default function AboutPreview() {
                   height: { xs: "auto", md: "100%" },
                   display: "flex",
                   flexDirection: "column",
-                  minHeight: { xs: 400, md: 0 },
+                  // minHeight: { xs: 400, md: 0 },
                 }}
               >
                 <Stack
@@ -845,27 +845,28 @@ export default function AboutPreview() {
                   elevation={4}
                   sx={{
                     flex: 1,
-                    borderRadius: 4,
+                    borderRadius: 1,
                     overflow: "hidden",
                     position: "relative",
                     border: "4px solid white",
                     bgcolor: THEME_COLORS.bgLight,
                     height: { xs: "500px", md: "auto" },
+                    // pb:{xs:3}
                   }}
                 >
                   {/* ✅ Indicateur si l'image affichée est en attente */}
                   {isPendingImage(data.images[selectedImageIndex]) && (
                     <Chip
-                      icon={<PendingIcon />}
-                      label="Non enregistrée"
-                      color="warning"
-                      size="small"
-                      sx={{
-                        position: "absolute",
-                        top: 10,
-                        left: 10,
-                        zIndex: 10,
-                      }}
+                    icon={<PendingIcon />}
+                    label="Non enregistrée"
+                    color="warning"
+                    size="small"
+                    sx={{
+                      position: "absolute",
+                      top: 10,
+                      left: 10,
+                      zIndex: 10,
+                    }}
                     />
                   )}
 
@@ -873,17 +874,20 @@ export default function AboutPreview() {
                     sx={{
                       height: "100%",
                       p: { xs: 2, md: 4 },
-                      overflowY: "auto",
+                      mb: { xs: 2},
+                      // overflowY: "auto",
                     }}
                   >
-                    <Grid container spacing={4} alignItems="center">
-                      <Grid item xs={12} container>
+                    <Grid container alignItems="center">
+                      <Grid item xs={12} container >
                         <Box>
                           <Box
                             sx={{
                               borderRadius: "16px",
                               overflow: "hidden",
                               boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
+                              maxHeight: { xs: "30vh",sm: "55vh" }, 
+                              minHeight: { sm: "55vh" },
                             }}
                           >
                             <img
@@ -902,8 +906,8 @@ export default function AboutPreview() {
                           <Box
                             sx={{
                               position: "absolute",
-                              bottom: 12,
-                              right: 10,
+                              bottom: {xs:5 , sm:12},
+                              right: {xs:3 , sm:10},
                               bgcolor: THEME_COLORS.beige,
                               color: "white",
                               p: 1,

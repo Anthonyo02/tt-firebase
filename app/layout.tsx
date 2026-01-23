@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/context/ThemeContext";
 import { AuthProvider } from "@/context/AuthContext";
 import { DataProvider } from "@/context/DataContext";
 import { ConnectionProvider } from "@/context/ConnectionContext";
+import Layout from "@/components/layout/Layout";
 
 export default function RootLayout({
   children,
@@ -19,7 +20,9 @@ export default function RootLayout({
           <AuthProvider>
             <DataProvider>
               <ConnectionProvider>
+              {/* <Layout> */}
                 {children}
+              {/* </Layout> */}
               </ConnectionProvider>
             </DataProvider>
           </AuthProvider>

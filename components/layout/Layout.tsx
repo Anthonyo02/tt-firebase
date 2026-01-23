@@ -15,7 +15,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   return (
     <Box sx={{ display: "flex", height: "100vh" }}>
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <Box component="main" sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "auto" }}>
+      <Box
+        component="main"
+        sx={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "auto",
+        }}
+      >
         <Header onMenuClick={() => setSidebarOpen(true)} />
         <Box sx={{ p: 3, flex: 1 }}>{children}</Box>
       </Box>

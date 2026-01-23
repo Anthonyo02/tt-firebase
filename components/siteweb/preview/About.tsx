@@ -5,11 +5,12 @@ import Link from "next/link";
 import { ArrowRight, Target, Heart, Lightbulb, Leaf } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-// Firebase Imports
+// Firebase
 import { doc, onSnapshot } from "firebase/firestore";
-import { db } from "@/lib/firebase"; // ⚠️ Adapter selon votre config
+import { db } from "@/lib/firebase";
+import { Grid, Typography } from "@mui/material";
 
-// --- Types ---
+// ---------- Types ----------
 interface FeatureData {
   icon: string;
   title: string;
@@ -25,23 +26,24 @@ interface AboutData {
   title: string;
 }
 
-// --- Mapping des icônes (string -> composant Lucide) ---
+// ---------- Icônes ----------
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
-  Target: Target,
-  Heart: Heart,
-  Lightbulb: Lightbulb,
-  Leaf: Leaf,
+  Target,
+  Heart,
+  Lightbulb,
+  Leaf,
 };
 
-// --- Mapping des couleurs pour les features ---
-const getFeatureColors = (icon: string): { bgColor: string; iconColor: string } => {
-  const colorMap: Record<string, { bgColor: string; iconColor: string }> = {
-    Target: { bgColor: "bg-primary/10", iconColor: "text-primary" },
-    Heart: { bgColor: "bg-tertiary/10", iconColor: "text-tertiary" },
-    Lightbulb: { bgColor: "bg-accent-warm/20", iconColor: "text-accent-warm" },
-    Leaf: { bgColor: "bg-secondary", iconColor: "text-primary" },
+// ---------- Couleurs ----------
+const getFeatureColors = (icon: string) => {
+  const map: Record<string, { bg: string; icon: string }> = {
+    Target: { bg: "bg-primary/10", icon: "text-primary" },
+    Heart: { bg: "bg-tertiary/10", icon: "text-tertiary" },
+    Lightbulb: { bg: "bg-accent-warm/20", icon: "text-accent-warm" },
+    Leaf: { bg: "bg-secondary", icon: "text-primary" },
   };
-  return colorMap[icon] || { bgColor: "bg-gray-100", iconColor: "text-gray-600" };
+
+  return map[icon] || { bg: "bg-gray-100", icon: "text-gray-600" };
 };
 
 export function About() {
@@ -49,132 +51,145 @@ export function About() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  // --- Charger les données depuis Firebase ---
+  // ---------- Firebase ----------
   useEffect(() => {
-    const docRef = doc(db, "website_content", "about_section"); // ⚠️ Adapter le nom du document
+    const ref = doc(db, "website_content", "about_section");
 
-    const unsubscribe = onSnapshot(
-      docRef,
-      (docSnap) => {
-        if (docSnap.exists()) {
-          const data = docSnap.data();
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
           setAboutData({
-            description: data.description || "",
-            experienceYears: data.experienceYears || "5+",
-            features: data.features || [],
-            images: data.images || [],
-            tagline: data.tagline || "",
-            title: data.title || "",
+            description: data.description ?? "",
+            experienceYears: data.experienceYears ?? "5+",
+            features: data.features ?? [],
+            images: data.images ?? [],
+            tagline: data.tagline ?? "",
+            title: data.title ?? "",
           });
         }
         setLoading(false);
       },
-      (error) => {
-        console.error("Erreur Firebase:", error);
-        setLoading(false);
-      }
+      () => setLoading(false),
     );
 
-    return () => unsubscribe();
+    return () => unsub();
   }, []);
 
-  // Changement automatique d'image toutes les 4 secondes
+  // ---------- Carousel ----------
   useEffect(() => {
-    if (!aboutData || aboutData.images.length === 0) return;
+    if (!aboutData?.images.length) return;
 
     const timer = setInterval(() => {
-      setCurrentIndex((prevIndex) => (prevIndex + 1) % aboutData.images.length);
+      setCurrentIndex((i) => (i + 1) % aboutData.images.length);
     }, 4000);
 
     return () => clearInterval(timer);
   }, [aboutData]);
 
-  // --- Loading state ---
+  // ---------- Loading ----------
   if (loading) {
     return (
-      <section className="py-20 bg-gradient-to-b from-background via-secondary/10 to-background">
-        <div className="container mx-auto px-4 flex items-center justify-center min-h-[400px]">
-          <div className="animate-pulse text-muted-foreground text-xl">Chargement...</div>
+      <section className="py-20">
+        <div className="container mx-auto flex min-h-[300px] items-center justify-center">
+          <p className="animate-pulse text-muted-foreground">Chargement...</p>
         </div>
       </section>
     );
   }
 
-  // --- Empty state ---
-  if (!aboutData) {
-    return (
-      <section className="py-20 bg-gradient-to-b from-background via-secondary/10 to-background">
-        <div className="container mx-auto px-4 flex items-center justify-center min-h-[400px]">
-          <div className="text-muted-foreground text-xl">Aucune donnée disponible</div>
-        </div>
-      </section>
-    );
-  }
+  if (!aboutData) return null;
 
   return (
-    <section className="py-20 bg-[#FDFCFB] via-secondary/10 to-background">
+    <section className="py-20 bg-[#FDFCFB]">
       <div className="container mx-auto px-4">
         <div className="grid items-center gap-12 lg:grid-cols-2">
-          
-          {/* Section Image transformée en Carousel */}
+          {/* ================= IMAGE / CAROUSEL ================= */}
           <div className="relative">
-            {/* Éléments décoratifs (inchangés) */}
+            {/* Décor */}
             <div className="absolute -left-4 -top-4 h-20 w-20 rounded-full bg-secondary/50" />
             <div className="absolute -right-8 top-1/2 h-16 w-16 rounded-full bg-accent-warm/20" />
-            
-            {/* Conteneur du Carousel */}
-            <div className="aspect-[4/3] overflow-hidden rounded-2xl relative z-10 bg-gray-200">
-              {aboutData.images.map((src, index) => (
+
+            {/* Carousel */}
+            <div className="relative z-10 aspect-[4/3] overflow-hidden rounded-2xl bg-gray-200">
+              {aboutData.images.map((src, i) => (
                 <img
-                  key={index}
+                  key={i}
                   src={src}
-                  alt={`Équipe Tolo-Tady Communication ${index + 1}`}
-                  className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ease-in-out ${
-                    index === currentIndex ? "opacity-100" : "opacity-0"
+                  alt={`Équipe ${i + 1}`}
+                  className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ${
+                    i === currentIndex ? "opacity-100" : "opacity-0"
                   }`}
                 />
               ))}
             </div>
 
-            {/* Badge flottant (dynamique) */}
-            <div className="absolute -bottom-6 -right-6 hidden rounded-xl bg-tertiary p-6 text-white shadow-lg md:block z-20">
-              <p className="font-heading text-3xl font-bold">{aboutData.experienceYears}</p>
-              <p className="text-sm opacity-90">Années d'expérience</p>
-            </div>
+            {/* ✅ BADGE QUI FONCTIONNE */}
+            <Grid
+              
+              direction="column"
+              position={"absolute"}
+              bottom={-8}
+              right={-10}
+              zIndex={'20'}
+              sx={{
+                bgcolor: "var(--tertiary, #6B7280)", // adapte si besoin
+                p: 2,
+                borderRadius: "12px",
+                boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
+              }}
+            >
+              <Grid item>
+                <Typography
+                  variant="h4"
+                  fontWeight="bold"
+                  fontFamily="var(--font-heading)"
+                  color="white"
+                >
+                  {aboutData.experienceYears}
+                </Typography>
+              </Grid>
+
+              <Grid item>
+                <Typography variant="body2" sx={{ opacity: 0.9 }} color="white">
+                  Années d’expérience
+                </Typography>
+              </Grid>
+            </Grid>
           </div>
 
-          {/* Content (dynamique) */}
+          {/* ================= CONTENT ================= */}
           <div className="space-y-6">
             <div>
               <p className="mb-2 text-sm font-medium uppercase tracking-wider text-accent-warm">
                 {aboutData.tagline}
               </p>
-              <h2 className="font-heading text-3xl font-bold text-foreground md:text-4xl text-balance">
+              <h2 className="text-3xl font-bold md:text-4xl font-heading">
                 {aboutData.title}
               </h2>
             </div>
-            <p className="text-lg leading-relaxed text-muted-foreground">
+
+            <p className="text-lg text-muted-foreground">
               {aboutData.description}
             </p>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              {aboutData.features.map((feature) => {
-                const IconComponent = ICON_MAP[feature.icon] || Target;
-                const colors = getFeatureColors(feature.icon);
+              {aboutData.features.map((f) => {
+                const Icon = ICON_MAP[f.icon] || Target;
+                const colors = getFeatureColors(f.icon);
 
                 return (
-                  <div key={feature.title} className="flex items-start gap-3">
+                  <div key={f.title} className="flex gap-3">
                     <div
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${colors.bgColor}`}
+                      className={`flex h-10 w-10 items-center justify-center rounded-lg ${colors.bg}`}
                     >
-                      <IconComponent className={`h-5 w-5 ${colors.iconColor}`} />
+                      <Icon className={`h-5 w-5 ${colors.icon}`} />
                     </div>
                     <div>
-                      <h3 className="font-heading text-sm font-semibold text-foreground">
-                        {feature.title}
-                      </h3>
+                      <h3 className="text-sm font-semibold">{f.title}</h3>
                       <p className="text-xs text-muted-foreground">
-                        {feature.description}
+                        {f.description}
                       </p>
                     </div>
                   </div>
@@ -182,11 +197,8 @@ export function About() {
               })}
             </div>
 
-            <Button
-              asChild
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
-            >
-              <Link href="/a-propos" className="inline-flex items-center gap-2">
+            <Button asChild className="bg-primary hover:bg-primary/90">
+              <Link href="#" className="flex items-center gap-2">
                 En savoir plus
                 <ArrowRight className="h-4 w-4" />
               </Link>
