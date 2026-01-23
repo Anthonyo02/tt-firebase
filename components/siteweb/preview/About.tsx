@@ -131,7 +131,7 @@ export function About() {
               direction="column"
               position={"absolute"}
               bottom={-8}
-              right={-10}
+              right={-11}
               zIndex={'20'}
               sx={{
                 bgcolor: "var(--tertiary, #6B7280)", // adapte si besoin
