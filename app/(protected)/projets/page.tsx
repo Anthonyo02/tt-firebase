@@ -1,4 +1,4 @@
-// app/materiels/page.tsx
+// app/projet/page.tsx
 "use client";
 
 import Projets from "@/components/Projets";

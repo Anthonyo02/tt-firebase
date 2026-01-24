@@ -1,28 +1,33 @@
 "use client";
 
 import React from "react";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 
-interface ProtectedLayoutProps {
+interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
-const ProtectedLayout: React.FC<ProtectedLayoutProps> = ({ children }) => {
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { user, isLoading } = useAuth();
   const router = useRouter();
 
-  // 🔹 Tant que l'auth n'est pas chargée → loader
+  // 🔹 Affiche un loader pendant le chargement
   if (isLoading) return <div>Chargement...</div>;
 
-  // 🔹 Si pas de user → redirection immédiate
-  if (!user) {
-    router.push("/login");
-    return null; // ne rien afficher du tout
+  // 🔹 Si hors ligne mais user présent en localStorage → ne pas déconnecter
+  if (!navigator.onLine && user) {
+    return <>{children}</>;
   }
 
-  // 🔹 User connecté → affiche le layout complet
+  // 🔹 Redirection si pas de user
+  if (!user) {
+    router.push("/login");
+    return null;
+  }
+
+  // 🔹 User connecté → afficher le contenu
   return <>{children}</>;
 };
 
-export default ProtectedLayout;
+export default ProtectedRoute;
