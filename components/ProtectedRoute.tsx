@@ -26,7 +26,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     return null;
   }
 
-  // 🔹 User connecté → afficher le contenu
+  // 🔹 User connecté  afficher le contenu 
   return <>{children}</>;
 };
 
