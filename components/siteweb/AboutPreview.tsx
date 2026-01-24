@@ -9,34 +9,22 @@ import { db2 } from "@/lib/firebase-site";
 
 // Icons (MUI)
 import {
-  Favorite as Heart,
-  Lightbulb,
-  ArrowForward as ArrowRight,
   Edit as EditIcon,
   Visibility as PreviewIcon,
-  Add as AddIcon,
   Save as SaveIcon,
-  Delete as DeleteIcon,
   ExpandMore as ExpandMoreIcon,
-  TextFields as TextFieldsIcon,
   Image as ImageIcon,
-  Palette as PaletteIcon,
-  EnergySavingsLeaf,
-  TabOutlined,
-  ChevronLeft,
-  ChevronRight,
-  DeleteOutline as DeleteOutlineIcon,
-  Star as StarIcon,
-  PhoneAndroid as MobileIcon,
-  DesktopWindows as DesktopIcon,
   CloudUpload as CloudUploadIcon,
   HourglassEmpty as PendingIcon,
+  DeleteOutline as DeleteOutlineIcon,
+  DesktopWindows as DesktopIcon,
+  PhoneAndroid as MobileIcon,
+  ColorLens as ColorIcon,
 } from "@mui/icons-material";
 
 import {
   Box,
   Button,
-  Container,
   Typography,
   TextField,
   IconButton,
@@ -51,113 +39,81 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  MenuItem,
   Avatar,
   Divider,
   Badge,
   useTheme,
   useMediaQuery,
   Chip,
+  InputAdornment,
 } from "@mui/material";
+
+// Import du composant de prévisualisation front-end (si existant)
 import { About } from "./preview/About";
+// Import du modal global d'édition (pour les textes complexes)
 import ShowEditAbout from "../modals/ShowEditAbout";
 
 // --- Types ---
-interface Feature {
-  icon: string;
+// Structure correspondant exactement à votre JSON demandé
+interface HeroImage {
+  imageUrl: string;
+  imageId: string; // public_id cloudinary
   title: string;
-  description: string;
+  subTitle: string;
+  color: string;
 }
 
 interface AboutData {
-  tagline: string;
-  title: string;
-  description: string;
-  experienceYears: string;
-  images: string[];
-  features: Feature[];
+  image: HeroImage;
+  history: any; // On simplifie ici car géré par ShowEditAbout, mais nécessaire pour le typage
+  cards: any[];
+  values: any;
+  approach: any;
+  cta: any;
 }
 
-// Type pour les images en attente d'upload
+// Type pour l'image en attente d'upload
 interface PendingImage {
   file: File;
   previewUrl: string;
 }
 
-// --- Icon Map ---
-const ICON_MAP: Record<string, React.ReactElement> = {
-  Target: <TabOutlined />,
-  Heart: <Heart />,
-  Lightbulb: <Lightbulb />,
-  Leaf: <EnergySavingsLeaf />,
-  Star: <StarIcon />,
-};
-
 // --- Theme Colors ---
 const THEME_COLORS = {
   beige: "#D5B595",
-  olive: "#868B63",
+  olive: "#616637",
   bgLight: "#FDFCFB",
   textMain: "#1A1A1A",
 };
 
 // --- Options de compression ---
 const COMPRESSION_OPTIONS = {
-  maxSizeMB: 0.5,
+  maxSizeMB: 1, // 1MB pour une image Hero
   maxWidthOrHeight: 1920,
   useWebWorker: true,
   fileType: "image/webp" as const,
 };
 
-// --- Helper: Extraire l'ID public Cloudinary depuis l'URL ---
-const getCloudinaryPublicId = (url: string): string | null => {
-  try {
-    const regex = /\/v\d+\/(.+)\.[a-z]+$/;
-    const match = url.match(regex);
-    return match ? match[1] : null;
-  } catch (e) {
-    console.error("Erreur extraction ID", e);
-    return null;
-  }
-};
-
 // --- Valeurs par défaut ---
 const DEFAULT_ABOUT_DATA: AboutData = {
-  tagline: "QUI SOMMES-NOUS",
-  title: "Une agence engagée pour un impact positif",
-  description:
-    "Tolo-Tady Communication est une agence de communication engagée à Madagascar, spécialisée dans le storytelling, la production audiovisuelle et le marketing digital au service des organisations à impact social, environnemental et économique positif.",
-  experienceYears: "5+",
-  images: ["/imgcarousel/bandfsdnier.png"],
-  features: [
-    {
-      icon: "Target",
-      title: "Impact mesurable",
-      description: "Des résultats concrets pour votre communication",
-    },
-    {
-      icon: "Heart",
-      title: "Engagement social",
-      description: "Au service d'un Madagascar meilleur",
-    },
-    {
-      icon: "Lightbulb",
-      title: "Innovation créative",
-      description: "Des solutions adaptées et modernes",
-    },
-    {
-      icon: "Leaf",
-      title: "Durabilité",
-      description: "Communication responsable et éthique",
-    },
-  ],
+  image: {
+    imageUrl: "",
+    imageId: "",
+    title: "À Propos",
+    subTitle: "Une agence de communication engagée",
+    color: "#888c69",
+  },
+  history: {},
+  cards: [],
+  values: {},
+  approach: {},
+  cta: {},
 };
 
 // ============================================
 // COMPOSANT PRINCIPAL
 // ============================================
 export default function AboutPreview() {
-  // Hooks pour responsive
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
@@ -165,137 +121,133 @@ export default function AboutPreview() {
   const [data, setData] = useState<AboutData | null>(null);
   const [loading, setLoading] = useState(true);
   const [tabValue, setTabValue] = useState(0);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [deletingImg, setDeletingImg] = useState<number | null>(null);
   const [toast, setToast] = useState<{
     msg: string;
     type: "success" | "error" | "warning" | "info";
   } | null>(null);
 
-  // ✅ NOUVEAU: État pour stocker les images en attente d'upload
-  const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
+  // État pour l'image Hero en attente d'upload
+  const [pendingHeroImage, setPendingHeroImage] = useState<PendingImage | null>(null);
 
   // ============================================
   // USEEFFECT - FIREBASE SYNC
   // ============================================
   useEffect(() => {
-    const docRef = doc(db2, "website_content", "about_section");
+    // Note: On pointe vers "full_about" comme demandé
+    const docRef = doc(db2, "website_content", "full_about");
 
     const unsubscribe = onSnapshot(
       docRef,
       (snapshot) => {
         if (snapshot.exists()) {
           const docData = snapshot.data();
-
-          const aboutData: AboutData = {
-            tagline: docData.tagline || DEFAULT_ABOUT_DATA.tagline,
-            title: docData.title || DEFAULT_ABOUT_DATA.title,
-            description: docData.description || DEFAULT_ABOUT_DATA.description,
-            experienceYears:
-              docData.experienceYears || DEFAULT_ABOUT_DATA.experienceYears,
-            images: Array.isArray(docData.images)
-              ? docData.images
-              : DEFAULT_ABOUT_DATA.images,
-            features: Array.isArray(docData.features)
-              ? docData.features.map((f: any) => ({
-                  icon: f.icon || "Star",
-                  title: f.title || "Nouveau point",
-                  description: f.description || "",
-                }))
-              : DEFAULT_ABOUT_DATA.features,
-          };
-
-          setData(aboutData);
+          // On s'assure que la structure image existe
+          const loadedData = {
+            ...docData,
+            image: {
+              imageUrl: docData.image?.imageUrl || DEFAULT_ABOUT_DATA.image.imageUrl,
+              imageId: docData.image?.imageId || DEFAULT_ABOUT_DATA.image.imageId,
+              title: docData.image?.title || DEFAULT_ABOUT_DATA.image.title,
+              subTitle: docData.image?.subTitle || DEFAULT_ABOUT_DATA.image.subTitle,
+              color: docData.image?.color || DEFAULT_ABOUT_DATA.image.color,
+            }
+          } as AboutData;
+          
+          setData(loadedData);
         } else {
           setDoc(docRef, DEFAULT_ABOUT_DATA);
           setData(DEFAULT_ABOUT_DATA);
         }
-
         setLoading(false);
       },
       (error) => {
-        console.error("Erreur Firebase onSnapshot:", error);
-        setToast({
-          msg: "Erreur de connexion à la base de données",
-          type: "error",
-        });
+        console.error("Erreur Firebase:", error);
+        setToast({ msg: "Erreur de connexion", type: "error" });
         setLoading(false);
-      },
+      }
     );
 
     return () => unsubscribe();
   }, []);
 
-  // ✅ NOUVEAU: Cleanup des blob URLs au démontage
+  // Cleanup des URLs temporaires
   useEffect(() => {
     return () => {
-      pendingImages.forEach((pending) => {
-        URL.revokeObjectURL(pending.previewUrl);
-      });
+      if (pendingHeroImage) {
+        URL.revokeObjectURL(pendingHeroImage.previewUrl);
+      }
     };
-  }, []);
+  }, [pendingHeroImage]);
 
   // ============================================
-  // LOGIQUE DU CAROUSEL
+  // GESTION DE L'IMAGE
   // ============================================
-  const nextSlide = useCallback(() => {
-    if (!data || data.images.length <= 1) return;
-    setCurrentIndex((prev) => (prev + 1) % data.images.length);
-  }, [data]);
+  
+  const handleImageSelect = (file: File) => {
+    if (!data) return;
 
-  const prevSlide = useCallback(() => {
-    if (!data || data.images.length <= 1) return;
-    setCurrentIndex(
-      (prev) => (prev - 1 + data.images.length) % data.images.length,
-    );
-  }, [data]);
+    // Nettoyage ancienne preview
+    if (pendingHeroImage) {
+      URL.revokeObjectURL(pendingHeroImage.previewUrl);
+    }
 
-  useEffect(() => {
-    if (tabValue === 1 || !data || data.images.length <= 1) return;
-    const timer = setInterval(nextSlide, 4000);
-    return () => clearInterval(timer);
-  }, [data, tabValue, nextSlide]);
+    const previewUrl = URL.createObjectURL(file);
+    setPendingHeroImage({ file, previewUrl });
 
-  // ✅ NOUVEAU: Vérifier si une URL est une image en attente
-  const isPendingImage = useCallback(
-    (url: string): boolean => {
-      return pendingImages.some((p) => p.previewUrl === url);
-    },
-    [pendingImages],
-  );
+    // Mise à jour optimiste de l'UI
+    setData({
+      ...data,
+      image: {
+        ...data.image,
+        imageUrl: previewUrl
+      }
+    });
 
-  // ✅ NOUVEAU: Obtenir le nombre d'images en attente
-  const pendingCount = pendingImages.length;
+    setToast({
+      msg: "Image sélectionnée. Cliquez sur Enregistrer pour uploader.",
+      type: "info",
+    });
+  };
+
+  const handleCancelPending = () => {
+    if (!pendingHeroImage) return;
+    URL.revokeObjectURL(pendingHeroImage.previewUrl);
+    setPendingHeroImage(null);
+    setToast({ msg: "Modification d'image annulée", type: "info" });
+    // Note: Pour rafraîchir l'ancienne image, on compte sur le prochain snapshot Firebase ou un reload manuel
+  };
 
   // ============================================
-  // ACTIONS - SAUVEGARDE (MODIFIÉ)
+  // SAUVEGARDE (AVEC UPLOAD FULLABOUT)
   // ============================================
   const handleSave = async () => {
     if (!data) return;
     setSaving(true);
-    setUploading(pendingImages.length > 0);
 
     try {
-      let finalImages = [...data.images];
-      const uploadErrors: string[] = [];
+      let finalImageData = { ...data.image };
 
-      // ✅ Upload des images en attente une par une
-      for (const pending of pendingImages) {
+      // 1. Upload Cloudinary si une nouvelle image est sélectionnée
+      if (pendingHeroImage) {
+        setUploading(true);
         try {
-          // Compression de l'image
           const compressedFile = await imageCompression(
-            pending.file,
-            COMPRESSION_OPTIONS,
+            pendingHeroImage.file,
+            COMPRESSION_OPTIONS
           );
 
-          // Upload vers Cloudinary
           const formData = new FormData();
           formData.append("file", compressedFile);
+          
+          // Si on remplace une image existante, on passe son ID (Optionnel, géré par votre API)
+          if (data.image.imageId) {
+            formData.append("publicId", data.image.imageId);
+          }
 
-          const res = await fetch("/api/cloudinary/uploadweb/about", {
+          // Appel à VOTRE route API spécifique
+          const res = await fetch("/api/cloudinary/uploadweb/fullabout", {
             method: "POST",
             body: formData,
           });
@@ -306,51 +258,42 @@ export default function AboutPreview() {
             throw new Error(resData.error || "Erreur upload");
           }
 
-          // Remplacer l'URL temporaire par l'URL Cloudinary
-          const index = finalImages.indexOf(pending.previewUrl);
-          if (index !== -1) {
-            finalImages[index] = resData.imageUrl;
-          }
+          // Mise à jour avec les infos Cloudinary
+          finalImageData = {
+            ...finalImageData,
+            imageUrl: resData.imageUrl,
+            imageId: resData.imagePublicId, // ou resData.public_id selon votre API
+          };
 
-          // Libérer la mémoire du blob URL
-          URL.revokeObjectURL(pending.previewUrl);
-        } catch (uploadError: any) {
-          console.error("Erreur upload image:", uploadError);
-          uploadErrors.push(pending.file.name);
+          // Nettoyage
+          URL.revokeObjectURL(pendingHeroImage.previewUrl);
+          setPendingHeroImage(null);
 
-          // Retirer l'image échouée de la liste
-          finalImages = finalImages.filter((img) => img !== pending.previewUrl);
-          URL.revokeObjectURL(pending.previewUrl);
+        } catch (uploadErr) {
+          console.error("Erreur Upload:", uploadErr);
+          setToast({ msg: "Erreur lors de l'upload de l'image", type: "error" });
+          setSaving(false);
+          setUploading(false);
+          return; // On arrête si l'upload échoue
         }
       }
 
-      // Vider la liste des images en attente
-      setPendingImages([]);
-
-      // Mettre à jour le state local avec les URLs finales
-      setData({ ...data, images: finalImages });
-
-      // Sauvegarder dans Firebase
-      await updateDoc(doc(db2, "website_content", "about_section"), {
-        ...data,
-        images: finalImages,
+      // 2. Sauvegarde Firestore
+      const docRef = doc(db2, "website_content", "full_about");
+      
+      // On sauvegarde l'objet image mis à jour et on conserve le reste
+      await updateDoc(docRef, {
+        image: finalImageData,
+        // On peut aussi mettre à jour les autres champs s'ils ont été modifiés localement
+        // history: data.history, cards: data.cards, etc.
       });
 
-      // Afficher le message approprié
-      if (uploadErrors.length > 0) {
-        setToast({
-          msg: `Sauvegarde effectuée, mais ${uploadErrors.length} image(s) n'ont pas pu être uploadées`,
-          type: "warning",
-        });
-      } else {
-        setToast({ msg: "Contenu mis à jour avec succès !", type: "success" });
-      }
+      setData({ ...data, image: finalImageData });
+      setToast({ msg: "Sauvegarde réussie !", type: "success" });
+
     } catch (e: any) {
-      console.error("Erreur sauvegarde:", e);
-      setToast({
-        msg: e.message || "Erreur lors de la sauvegarde",
-        type: "error",
-      });
+      console.error("Erreur Sauvegarde:", e);
+      setToast({ msg: "Erreur lors de la sauvegarde", type: "error" });
     } finally {
       setSaving(false);
       setUploading(false);
@@ -358,216 +301,30 @@ export default function AboutPreview() {
   };
 
   // ============================================
-  // ACTIONS - AJOUT IMAGE TEMPORAIRE (MODIFIÉ)
+  // HANDLERS LOCAUX (TEXTE & COULEUR)
   // ============================================
-  const handleImageSelect = (file: File) => {
-    if (!data) return;
-
-    // Créer une URL temporaire pour la prévisualisation
-    const previewUrl = URL.createObjectURL(file);
-
-    // Ajouter à la liste des images en attente
-    setPendingImages((prev) => [...prev, { file, previewUrl }]);
-
-    // Ajouter l'URL temporaire aux images pour l'affichage
-    setData({ ...data, images: [...data.images, previewUrl] });
-
-    // Sélectionner automatiquement la nouvelle image
-    setSelectedImageIndex(data.images.length);
-
-    setToast({
-      msg: "Image ajoutée en prévisualisation. Cliquez sur 'Enregistrer' pour confirmer.",
-      type: "info",
-    });
-  };
-
-  // ============================================
-  // ACTIONS - SUPPRESSION IMAGE (MODIFIÉ)
-  // ============================================
-  const handleDeleteImage = async (index: number) => {
-    if (!data || data.images.length <= 1) {
-      setToast({
-        msg: "Vous devez garder au moins une image",
-        type: "error",
-      });
-      return;
-    }
-
-    const imageUrl = data.images[index];
-
-    // ✅ Si c'est une image en attente, on la supprime simplement
-    if (isPendingImage(imageUrl)) {
-      // Libérer le blob URL
-      URL.revokeObjectURL(imageUrl);
-
-      // Retirer de la liste des images en attente
-      setPendingImages((prev) => prev.filter((p) => p.previewUrl !== imageUrl));
-
-      // Retirer de data.images
-      const newImages = data.images.filter((_, idx) => idx !== index);
-      setData({ ...data, images: newImages });
-
-      // Ajuster la sélection
-      if (selectedImageIndex >= newImages.length) {
-        setSelectedImageIndex(Math.max(0, newImages.length - 1));
-      }
-      if (currentIndex >= newImages.length) {
-        setCurrentIndex(Math.max(0, newImages.length - 1));
-      }
-
-      setToast({
-        msg: "Image temporaire supprimée",
-        type: "success",
-      });
-      return;
-    }
-
-    // ✅ Si c'est une image déjà sur Cloudinary
-    setDeletingImg(index);
-
-    try {
-      const publicId = getCloudinaryPublicId(imageUrl);
-
-      if (publicId) {
-        const response = await fetch("/api/cloudinary/deleteweb", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ publicId }),
-        });
-
-        if (!response.ok) {
-          console.warn("Erreur suppression Cloudinary (non bloquant)");
-        }
-      }
-
-      const newImages = data.images.filter((_, idx) => idx !== index);
-      setData({ ...data, images: newImages });
-
-      if (selectedImageIndex >= newImages.length) {
-        setSelectedImageIndex(Math.max(0, newImages.length - 1));
-      }
-      if (currentIndex >= newImages.length) {
-        setCurrentIndex(Math.max(0, newImages.length - 1));
-      }
-
-      setToast({
-        msg: "Image supprimée. N'oubliez pas d'enregistrer.",
-        type: "success",
-      });
-    } catch (e: any) {
-      console.error("Erreur suppression:", e);
-      setToast({
-        msg: "Erreur lors de la suppression",
-        type: "error",
-      });
-    } finally {
-      setDeletingImg(null);
-    }
-  };
-
-  // ============================================
-  // ACTIONS - ANNULER LES IMAGES EN ATTENTE
-  // ============================================
-  const handleCancelPendingImages = () => {
-    if (!data) return;
-
-    // Libérer tous les blob URLs
-    pendingImages.forEach((pending) => {
-      URL.revokeObjectURL(pending.previewUrl);
-    });
-
-    // Retirer les images en attente de data.images
-    const confirmedImages = data.images.filter((img) => !isPendingImage(img));
-    setData({ ...data, images: confirmedImages });
-
-    // Vider la liste des images en attente
-    setPendingImages([]);
-
-    // Ajuster la sélection
-    if (selectedImageIndex >= confirmedImages.length) {
-      setSelectedImageIndex(Math.max(0, confirmedImages.length - 1));
-    }
-
-    setToast({
-      msg: "Images en attente annulées",
-      type: "info",
-    });
-  };
-
-  // ============================================
-  // ACTIONS - MODIFICATIONS LOCALES
-  // ============================================
-  const handleLocalChange = (field: keyof AboutData, value: any) => {
-    if (!data) return;
-    setData({ ...data, [field]: value });
-  };
-
-  const handleFeatureChange = (
-    index: number,
-    field: keyof Feature,
-    value: string,
-  ) => {
-    if (!data) return;
-    const newFeatures = [...data.features];
-    newFeatures[index] = { ...newFeatures[index], [field]: value };
-    setData({ ...data, features: newFeatures });
-  };
-
-  const handleAddFeature = () => {
+  const handleImageFieldChange = (field: keyof HeroImage, value: string) => {
     if (!data) return;
     setData({
       ...data,
-      features: [
-        ...data.features,
-        {
-          icon: "Star",
-          title: "Nouveau point",
-          description: "Description ici",
-        },
-      ],
+      image: {
+        ...data.image,
+        [field]: value
+      }
     });
   };
-
-  const handleRemoveFeature = (index: number) => {
-    if (!data || data.features.length <= 1) {
-      setToast({
-        msg: "Vous devez garder au moins un point fort",
-        type: "error",
-      });
-      return;
-    }
-    setData({
-      ...data,
-      features: data.features.filter((_, idx) => idx !== index),
-    });
-  };
-
-  // ============================================
-  // LOADING STATE
-  // ============================================
-  if (loading || !data) {
-    return (
-      <Box
-        sx={{
-          height: "100vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexDirection: "column",
-          gap: 2,
-        }}
-      >
-        <CircularProgress size={60} sx={{ color: THEME_COLORS.olive }} />
-        <Typography color="text.secondary">
-          Chargement de la section...
-        </Typography>
-      </Box>
-    );
-  }
 
   // ============================================
   // RENDER
   // ============================================
+  if (loading || !data) {
+    return (
+      <Box sx={{ height: 400, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <CircularProgress sx={{ color: THEME_COLORS.olive }} />
+      </Box>
+    );
+  }
+
   return (
     <Box
       sx={{ width: "100%" }}
@@ -575,643 +332,212 @@ export default function AboutPreview() {
       overflow={"hidden"}
       borderRadius={3}
     >
-      {/* ========== TABS HEADER ========== */}
+      {/* HEADER TABS */}
       <Box
         sx={{
           width: "100%",
-          maxWidth: 1400,
-          mx: "auto",
-          // Un peu de padding vertical sur mobile pour aérer
-          pt: { xs: 1, md: 0 },
+          bgcolor: THEME_COLORS.olive,
           px: { xs: 1, md: 4 },
         }}
-        bgcolor={"#616637"}
       >
         <Grid container alignItems="center">
-          {" "}
-          {/* Ajout de alignItems center */}
-          {/* ZONE TABS : Prend plus de place sur mobile pour le scroll */}
-          <Grid item xs={9} sm={8} md={9}>
+          <Grid item xs={9}>
             <Tabs
               value={tabValue}
               onChange={(_, v) => setTabValue(v)}
-              variant="scrollable" // IMPORTANT: Permet le scroll horizontal sur petit mobile
-              scrollButtons="auto"
-              allowScrollButtonsMobile
+              variant="scrollable"
               sx={{
-                minHeight: { xs: 50, md: 64 }, // Hauteur réduite sur mobile
-                "& .MuiTabs-indicator": {
-                  height: 4,
-                  borderRadius: "3px 3px 0 0",
-                  background: "white",
-                },
+                minHeight: { xs: 50, md: 64 },
+                "& .MuiTabs-indicator": { bgcolor: "white" },
                 "& .MuiTab-root": {
-                  textTransform: "none",
-                  fontWeight: 600,
-                  fontSize: { xs: "0.8rem", md: "1rem" },
-                  minHeight: { xs: 50, md: 64 },
-                  color: "rgba(255,255,255, 0.7)",
-                  padding: { xs: "12px 10px", md: "12px 16px" }, // Moins de padding sur mobile
+                  color: "rgba(255,255,255,0.7)",
                   "&.Mui-selected": { color: "white" },
                 },
               }}
             >
-              <Tab
-                icon={<PreviewIcon sx={{ fontSize: { xs: 18, md: 20 } }} />}
-                iconPosition="start"
-                label={isMobile ? "Aperçu" : "Aperçu du site"}
-              />
-              <Tab
+              <Tab icon={<PreviewIcon />} iconPosition="start" label="Aperçu" />
+              <Tab 
                 icon={
-                  <Badge
-                    // badgeContent={pendingCount}
-                    sx={{
-                      "& .MuiBadge-badge": {
-                        // background: "THEME.secondary.gradient", // Décommentez si vous avez accès au thème
-                        background: "#ff4444",
-                        color: "white",
-                      },
-                    }}
-                  >
-                    <EditIcon sx={{ fontSize: { xs: 18, md: 20 } }} />
+                  <Badge color="warning" variant="dot" invisible={!pendingHeroImage}>
+                    <EditIcon />
                   </Badge>
-                }
-                iconPosition="start"
-                label={isMobile ? "Éditeur" : "Éditeur Visuel"}
+                } 
+                iconPosition="start" 
+                label="Éditeur Hero" 
               />
             </Tabs>
           </Grid>
-          {/* ZONE BOUTON : S'adapte à droite */}
-          <Grid item xs={3} sm={4} md={3}>
+          <Grid item xs={3} sx={{ textAlign: "right", p: 1 }}>
+            {/* Le modal ShowEditAbout gère le reste du contenu (Cards, History, CTA) */}
             <ShowEditAbout />
           </Grid>
         </Grid>
       </Box>
-      {/* ========== VUE APERÇU ========== */}
+
+      {/* VUE APERÇU */}
       {tabValue === 0 && (
-        <Box
-          component="section"
-          sx={{
-            bgcolor: "#FDFCFB",
-            overflow: "hidden",
-          }}
-        >
+        <Box sx={{ bgcolor: "#FDFCFB" }}>
           <About />
         </Box>
       )}
 
-      {/* ========== VUE ÉDITEUR ========== */}
+      {/* VUE ÉDITEUR (HERO IMAGE) */}
       {tabValue === 1 && (
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "column",
-            height: { xs: "auto", md: "calc(100vh - 72px)" },
-          }}
-        >
-          {/* TOP BAR: IMAGES */}
-          <Paper
-            elevation={1}
-            sx={{
-              p: 2,
-              display: "flex",
-              alignItems: "center",
-              gap: 2,
-              overflowX: "auto",
-              zIndex: 10,
-              borderRadius: 0,
-              flexShrink: 0,
-            }}
-          >
-            <Button
-              component="label"
-              variant="contained"
-              startIcon={<AddIcon />}
-              sx={{ flexShrink: 0, whiteSpace: "nowrap" }}
+        <Box sx={{ height: { xs: "auto", md: "calc(100vh - 140px)" }, display: "flex", flexDirection: { xs: "column", md: "row" } }}>
+          
+          {/* GAUCHE : PRÉVISUALISATION IMAGE */}
+          <Box sx={{ flex: 1, p: 3, bgcolor: "#f0f0f0", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+            <Paper 
+              elevation={4}
+              sx={{ 
+                position: "relative", 
+                width: "100%", 
+                maxWidth: 800, 
+                aspectRatio: "16/9", 
+                borderRadius: 2, 
+                overflow: "hidden",
+                border: pendingHeroImage ? "4px dashed #ed6c02" : "none"
+              }}
             >
-              {isMobile ? "Ajouter" : "Ajouter Image"}
-              <input
-                hidden
-                accept="image/*"
-                type="file"
-                onChange={(e) =>
-                  e.target.files?.[0] && handleImageSelect(e.target.files[0])
-                }
-              />
-            </Button>
-
-            {/* ✅ NOUVEAU: Indicateur d'images en attente */}
-            {pendingCount > 0 && (
-              <>
-                <Chip
-                  icon={<PendingIcon />}
-                  label={`${pendingCount} en attente`}
-                  color="warning"
-                  size="small"
-                  onDelete={handleCancelPendingImages}
-                />
-              </>
-            )}
-
-            <Divider orientation="vertical" flexItem />
-            <Stack direction="row" spacing={2} alignItems="center">
-              {data.images.map((img, idx) => {
-                const isPending = isPendingImage(img);
-                return (
-                  <Box
-                    key={idx}
-                    onClick={() => setSelectedImageIndex(idx)}
-                    sx={{
-                      position: "relative",
-                      cursor: "pointer",
-                      border:
-                        selectedImageIndex === idx
-                          ? "3px solid #1976d2"
-                          : isPending
-                            ? "2px dashed #ed6c02"
-                            : "2px solid #616637",
-                      borderRadius: 1,
-                      opacity: selectedImageIndex === idx ? 1 : 0.7,
-                      transition: "all 0.2s",
-                      "&:hover": { opacity: 1, transform: "scale(1.05)" },
-                      flexShrink: 0,
-                    }}
-                  >
-                    <Avatar
-                      src={img}
-                      variant="rounded"
-                      sx={{ width: 80, height: 50 }}
-                    >
-                      <ImageIcon />
-                    </Avatar>
-
-                    {/* ✅ Badge indiquant si l'image est en attente */}
-                    <Box
-                      sx={{
-                        position: "absolute",
-                        top: -6,
-                        right: -6,
-                        bgcolor: isPending
-                          ? "#ed6c02"
-                          : selectedImageIndex === idx
-                            ? "#1976d2"
-                            : "#616637",
-                        color: "white",
-                        borderRadius: "50%",
-                        width: 20,
-                        height: 20,
-                        fontSize: 12,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontWeight: "bold",
-                      }}
-                    >
-                      {isPending ? "!" : idx + 1}
-                    </Box>
-
-                    {data.images.length > 1 && (
-                      <IconButton
-                        size="small"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteImage(idx);
-                        }}
-                        disabled={deletingImg === idx}
-                        sx={{
-                          position: "absolute",
-                          bottom: -8,
-                          right: -8,
-                          bgcolor: "error.main",
-                          color: "white",
-                          width: 20,
-                          height: 20,
-                          "&:hover": { bgcolor: "error.dark" },
-                        }}
-                      >
-                        {deletingImg === idx ? (
-                          <CircularProgress size={10} color="inherit" />
-                        ) : (
-                          <DeleteIcon sx={{ fontSize: 12 }} />
-                        )}
-                      </IconButton>
-                    )}
-                  </Box>
-                );
-              })}
-            </Stack>
-          </Paper>
-
-          {/* MAIN AREA: GRID SPLIT */}
-          <Box
-            sx={{
-              flex: 1,
-              overflow: { xs: "visible", md: "hidden" },
-              p: { xs: 2, md: 3 },
-            }}
-          >
-            <Grid container spacing={2} sx={{ height: "100%" }}>
-              {/* COLONNE GAUCHE: PRÉVISUALISATION */}
-              <Grid
-                item
-                xs={12}
-                md={7}
-                lg={8}
-                sx={{
-                  height: { xs: "auto", md: "100%" },
-                  display: "flex",
-                  flexDirection: "column",
-                  // minHeight: { xs: 400, md: 0 },
-                }}
-              >
-                <Stack
-                  direction="row"
-                  justifyContent="space-between"
-                  alignItems="center"
-                  mb={1}
-                >
-                  <Typography
-                    variant="h6"
-                    fontWeight={600}
-                    color="text.secondary"
-                  >
-                    Prévisualisation
-                  </Typography>
-                  {isMobile && <MobileIcon color="disabled" />}
-                  {!isMobile && <DesktopIcon color="disabled" />}
-                </Stack>
-
-                <Paper
-                  elevation={4}
-                  sx={{
-                    flex: 1,
-                    borderRadius: 1,
-                    overflow: "hidden",
-                    position: "relative",
-                    border: "4px solid white",
-                    bgcolor: THEME_COLORS.bgLight,
-                    height: { xs: "500px", md: "auto" },
-                    // pb:{xs:3}
-                  }}
-                >
-                  {/* ✅ Indicateur si l'image affichée est en attente */}
-                  {isPendingImage(data.images[selectedImageIndex]) && (
-                    <Chip
-                    icon={<PendingIcon />}
-                    label="Non enregistrée"
-                    color="warning"
-                    size="small"
-                    sx={{
-                      position: "absolute",
-                      top: 10,
-                      left: 10,
-                      zIndex: 10,
-                    }}
-                    />
-                  )}
-
-                  <Box
-                    sx={{
-                      height: "100%",
-                      p: { xs: 2, md: 4 },
-                      mb: { xs: 2},
-                      // overflowY: "auto",
-                    }}
-                  >
-                    <Grid container alignItems="center">
-                      <Grid item xs={12} container >
-                        <Box>
-                          <Box
-                            sx={{
-                              borderRadius: "16px",
-                              overflow: "hidden",
-                              boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
-                              maxHeight: { xs: "30vh",sm: "55vh" }, 
-                              minHeight: { sm: "55vh" },
-                            }}
-                          >
-                            <img
-                              src={
-                                data.images[selectedImageIndex] ||
-                                data.images[0]
-                              }
-                              alt="preview"
-                              style={{
-                                width: "100%",
-                                height: "100%",
-                                objectFit: "cover",
-                              }}
-                            />
-                          </Box>
-                          <Box
-                            sx={{
-                              position: "absolute",
-                              bottom: {xs:5 , sm:12},
-                              right: {xs:3 , sm:10},
-                              bgcolor: THEME_COLORS.beige,
-                              color: "white",
-                              p: 1,
-                              borderRadius: "12px",
-                              boxShadow: "0 5px 15px rgba(0,0,0,0.1)",
-                            }}
-                          >
-                            <Typography
-                              variant="h5"
-                              fontWeight="bold"
-                              align="left"
-                            >
-                              {data.experienceYears}
-                            </Typography>
-                            <Typography variant="body2" display="block">
-                              Années d'expérience
-                            </Typography>
-                          </Box>
-                        </Box>
-                      </Grid>
-                    </Grid>
-                  </Box>
-                </Paper>
-              </Grid>
-
-              {/* COLONNE DROITE: ÉDITEUR */}
-              <Grid
-                item
-                xs={12}
-                md={5}
-                lg={4}
-                sx={{
-                  height: { xs: "auto", md: "100%" },
-                  overflowY: { xs: "visible", md: "auto" },
-                  pr: 1,
-                }}
-                pt={0}
-              >
-                <Stack
-                  borderRadius={1}
-                  spacing={2}
-                  sx={{
-                    height: { xs: "auto", md: "100%" },
-                    overflowY: { xs: "visible", md: "auto" },
-                    pr: 1,
-                  }}
-                >
-                  <Grid
-                    container
-                    sx={{ position: "sticky", top: 0, zIndex: 99 }}
-                    bgcolor={"#616637"}
-                    borderRadius={1}
-                  >
-                    <Typography variant="h6" fontWeight={600} m={2}>
-                      Propriétés
+              {data.image.imageUrl ? (
+                <>
+                  <img 
+                    src={data.image.imageUrl} 
+                    alt="Hero" 
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }} 
+                  />
+                  {/* Simulation Overlay Texte */}
+                  <Box sx={{
+                    position: "absolute",
+                    bottom: 0, left: 0, right: 0,
+                    p: 3,
+                    background: "linear-gradient(to top, rgba(0,0,0,0.8), transparent)",
+                    color: "white"
+                  }}>
+                    <Typography variant="overline" sx={{ color: data.image.color, fontWeight: "bold", fontSize: "0.9rem" }}>
+                      {data.image.subTitle}
                     </Typography>
-                  </Grid>
+                    <Typography variant="h4" fontWeight="bold">
+                      {data.image.title}
+                    </Typography>
+                  </Box>
+                </>
+              ) : (
+                <Box sx={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "#ccc" }}>
+                  <ImageIcon sx={{ fontSize: 60, color: "#999" }} />
+                </Box>
+              )}
 
-                  {/* ACCORDION: TEXTES */}
-                  <Accordion
-                    defaultExpanded
-                    elevation={0}
-                    sx={{
-                      border: "1px solid #e0e0e0",
-                      borderRadius: "8px !important",
-                    }}
-                  >
-                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                      <Stack direction="row" spacing={1}>
-                        <TextFieldsIcon color="primary" />
-                        <Typography fontWeight={500}>Textes</Typography>
-                      </Stack>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                      <Stack spacing={2}>
-                        <TextField
-                          label="Surtitre"
-                          fullWidth
-                          size="small"
-                          value={data.tagline}
-                          onChange={(e) =>
-                            handleLocalChange("tagline", e.target.value)
-                          }
-                        />
-                        <TextField
-                          label="Titre Principal"
-                          fullWidth
-                          multiline
-                          rows={2}
-                          value={data.title}
-                          onChange={(e) =>
-                            handleLocalChange("title", e.target.value)
-                          }
-                        />
-                        <TextField
-                          label="Description"
-                          fullWidth
-                          multiline
-                          rows={4}
-                          value={data.description}
-                          onChange={(e) =>
-                            handleLocalChange("description", e.target.value)
-                          }
-                        />
-                        <TextField
-                          label="Années d'expérience"
-                          fullWidth
-                          size="small"
-                          value={data.experienceYears}
-                          onChange={(e) =>
-                            handleLocalChange("experienceYears", e.target.value)
-                          }
-                        />
-                      </Stack>
-                    </AccordionDetails>
-                  </Accordion>
+              {pendingHeroImage && (
+                <Chip 
+                  label="En attente de sauvegarde" 
+                  color="warning" 
+                  size="small" 
+                  sx={{ position: "absolute", top: 10, right: 10 }} 
+                />
+              )}
+            </Paper>
 
-                  {/* ACCORDION: FEATURES */}
-                  <Accordion
-                    elevation={0}
-                    sx={{
-                      border: "1px solid #e0e0e0",
-                      borderRadius: "8px !important",
-                    }}
-                  >
-                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                      <Stack direction="row" spacing={1}>
-                        <PaletteIcon color="secondary" />
-                        <Badge
-                          badgeContent={data.features.length}
-                          color="primary"
-                        >
-                          <Typography fontWeight={500} sx={{ mr: 1 }}>
-                            Points forts
-                          </Typography>
-                        </Badge>
-                      </Stack>
-                    </AccordionSummary>
-                    <AccordionDetails sx={{ bgcolor: "#fafafa", px: 1 }}>
-                      <Stack spacing={2}>
-                        {data.features.map((f, i) => (
-                          <Paper
-                            key={i}
-                            elevation={1}
-                            sx={{ p: 2, borderLeft: "4px solid #868B63" }}
-                          >
-                            <Grid container spacing={2}>
-                              <Grid
-                                item
-                                xs={12}
-                                display="flex"
-                                justifyContent="space-between"
-                              >
-                                <Typography
-                                  variant="caption"
-                                  fontWeight="bold"
-                                  color="primary"
-                                >
-                                  POINT #{i + 1}
-                                </Typography>
-                                <IconButton
-                                  size="small"
-                                  color="error"
-                                  onClick={() => handleRemoveFeature(i)}
-                                  disabled={data.features.length <= 1}
-                                >
-                                  <DeleteOutlineIcon fontSize="small" />
-                                </IconButton>
-                              </Grid>
-                              <Grid item xs={12}>
-                                <TextField
-                                  select
-                                  label="Icône"
-                                  value={f.icon}
-                                  onChange={(e) =>
-                                    handleFeatureChange(
-                                      i,
-                                      "icon",
-                                      e.target.value,
-                                    )
-                                  }
-                                  size="small"
-                                  fullWidth
-                                >
-                                  {Object.keys(ICON_MAP).map((key) => (
-                                    <MenuItem key={key} value={key}>
-                                      <Stack direction="row" gap={1}>
-                                        {React.cloneElement(ICON_MAP[key], {
-                                          fontSize: "small",
-                                        })}
-                                        {key}
-                                      </Stack>
-                                    </MenuItem>
-                                  ))}
-                                </TextField>
-                              </Grid>
-                              <Grid item xs={12}>
-                                <TextField
-                                  label="Titre"
-                                  value={f.title}
-                                  onChange={(e) =>
-                                    handleFeatureChange(
-                                      i,
-                                      "title",
-                                      e.target.value,
-                                    )
-                                  }
-                                  size="small"
-                                  fullWidth
-                                />
-                              </Grid>
-                              <Grid item xs={12}>
-                                <TextField
-                                  label="Description"
-                                  value={f.description}
-                                  onChange={(e) =>
-                                    handleFeatureChange(
-                                      i,
-                                      "description",
-                                      e.target.value,
-                                    )
-                                  }
-                                  size="small"
-                                  fullWidth
-                                  multiline
-                                  rows={2}
-                                />
-                              </Grid>
-                            </Grid>
-                          </Paper>
-                        ))}
-                        <Button
-                          variant="outlined"
-                          startIcon={<AddIcon />}
-                          onClick={handleAddFeature}
-                          fullWidth
-                          sx={{ borderStyle: "dashed" }}
-                        >
-                          Ajouter un point fort
-                        </Button>
-                      </Stack>
-                    </AccordionDetails>
-                  </Accordion>
+            <Stack direction="row" spacing={2} sx={{ mt: 3 }}>
+              <Button
+                component="label"
+                variant="contained"
+                startIcon={<CloudUploadIcon />}
+                sx={{ bgcolor: THEME_COLORS.olive }}
+              >
+                Changer l'image
+                <input hidden type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && handleImageSelect(e.target.files[0])} />
+              </Button>
+              {pendingHeroImage && (
+                <Button variant="outlined" color="warning" onClick={handleCancelPending}>
+                  Annuler
+                </Button>
+              )}
+            </Stack>
+          </Box>
 
-                  {/* SPACER */}
-                  <Box sx={{ height: 20 }} />
+          {/* DROITE : FORMULAIRE */}
+          <Box sx={{ width: { xs: "100%", md: 400 }, borderLeft: "1px solid #ddd", bgcolor: "white", display: "flex", flexDirection: "column" }}>
+            <Box sx={{ p: 2, borderBottom: "1px solid #eee", bgcolor: "#fafafa" }}>
+              <Typography variant="h6" fontWeight={600}>Paramètres Hero</Typography>
+            </Box>
+            
+            <Box sx={{ p: 3, flex: 1, overflowY: "auto" }}>
+              <Stack spacing={3}>
+                <TextField
+                  label="Titre Principal"
+                  fullWidth
+                  value={data.image.title}
+                  onChange={(e) => handleImageFieldChange("title", e.target.value)}
+                  variant="outlined"
+                />
+                
+                <TextField
+                  label="Sous-titre / Tagline"
+                  fullWidth
+                  value={data.image.subTitle}
+                  onChange={(e) => handleImageFieldChange("subTitle", e.target.value)}
+                  variant="outlined"
+                  multiline
+                  rows={2}
+                />
 
-                  {/* BOUTON ENREGISTRER */}
-                  <Grid
-                    container
-                    justifyContent={"right"}
-                    sx={{ position: "sticky", bottom: 1, zIndex: 99 }}
-                  >
-                    <Button
-                      variant="contained"
-                      size="small"
-                      startIcon={
-                        saving ? (
-                          <CircularProgress size={20} color="inherit" />
-                        ) : pendingCount > 0 ? (
-                          <CloudUploadIcon />
-                        ) : (
-                          <SaveIcon />
-                        )
-                      }
-                      onClick={handleSave}
-                      disabled={saving}
-                      sx={{
-                        borderRadius: 2,
-                        bgcolor: pendingCount > 0 ? "#ed6c02" : "#616637",
-                        "&:hover": {
-                          bgcolor: pendingCount > 0 ? "#c55a02" : "#4a4d2a",
-                        },
-                      }}
-                    >
-                      {saving
-                        ? uploading
-                          ? "Upload en cours..."
-                          : "Enregistrement..."
-                        : pendingCount > 0
-                          ? `Enregistrer (${pendingCount} image${pendingCount > 1 ? "s" : ""} à uploader)`
-                          : "Enregistrer les modifications"}
-                    </Button>
-                  </Grid>
-                </Stack>
-              </Grid>
-            </Grid>
+                <TextField
+                  label="Couleur d'accent (Sous-titre)"
+                  fullWidth
+                  value={data.image.color}
+                  onChange={(e) => handleImageFieldChange("color", e.target.value)}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <ColorIcon sx={{ color: data.image.color }} />
+                      </InputAdornment>
+                    ),
+                    endAdornment: (
+                      <input 
+                        type="color" 
+                        value={data.image.color} 
+                        onChange={(e) => handleImageFieldChange("color", e.target.value)}
+                        style={{ border: "none", background: "transparent", width: 30, cursor: "pointer" }} 
+                      />
+                    )
+                  }}
+                />
+
+                <Alert severity="info" sx={{ fontSize: "0.85rem" }}>
+                  L'ID Cloudinary sera mis à jour automatiquement lors de la sauvegarde.
+                  <br />
+                  <strong>ID actuel :</strong> {data.image.imageId || "Aucun"}
+                </Alert>
+              </Stack>
+            </Box>
+
+            <Box sx={{ p: 2, borderTop: "1px solid #ddd", bgcolor: "#fafafa", textAlign: "right" }}>
+              <Button
+                variant="contained"
+                onClick={handleSave}
+                disabled={saving}
+                startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
+                sx={{ 
+                  bgcolor: pendingHeroImage ? "#ed6c02" : THEME_COLORS.olive,
+                  "&:hover": { bgcolor: pendingHeroImage ? "#e65100" : "#4a4d2a" }
+                }}
+              >
+                {saving ? "Sauvegarde..." : pendingHeroImage ? "Enregistrer & Uploader" : "Enregistrer"}
+              </Button>
+            </Box>
           </Box>
         </Box>
       )}
 
-      {/* ========== TOAST NOTIFICATION ========== */}
+      {/* TOAST */}
       <Snackbar
         open={!!toast}
         autoHideDuration={4000}
         onClose={() => setToast(null)}
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >
-        <Alert
-          onClose={() => setToast(null)}
-          severity={toast?.type || "info"}
-          sx={{ width: "100%" }}
-          variant="filled"
-        >
+        <Alert onClose={() => setToast(null)} severity={toast?.type || "info"} variant="filled">
           {toast?.msg}
         </Alert>
       </Snackbar>

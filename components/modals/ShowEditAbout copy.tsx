@@ -1,6 +1,11 @@
 "use client";
-import React, { useState, useEffect, useRef } from "react";
-import imageCompression from "browser-image-compression";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  memo,
+} from "react";
 import {
   Box,
   TextField,
@@ -36,6 +41,7 @@ import { doc, onSnapshot, updateDoc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 // Icônes
+import SaveIcon from "@mui/icons-material/Save";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import LinkIcon from "@mui/icons-material/Link";
@@ -48,30 +54,7 @@ import HandshakeIcon from "@mui/icons-material/Handshake";
 import TouchAppIcon from "@mui/icons-material/TouchApp";
 import EditNoteIcon from "@mui/icons-material/EditNote";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import ImageIcon from "@mui/icons-material/Image";
-import CloudUploadIcon from "@mui/icons-material/CloudUpload";
-import HourglassEmptyIcon from "@mui/icons-material/HourglassEmpty";
-import PaletteIcon from "@mui/icons-material/Palette";
-
-// --- Palette de couleurs prédéfinies ---
-const COLOR_PALETTE = [
-  { name: "Olive", value: "#616637" },
-  { name: "Olive clair", value: "#8C915D" },
-  { name: "Vert sauge", value: "#9CAF88" },
-  { name: "Beige", value: "#D4C5A9" },
-  { name: "Terracotta", value: "#C4A484" },
-  { name: "Bleu profond", value: "#2C3E50" },
-  { name: "Bleu ciel", value: "#3498DB" },
-  { name: "Corail", value: "#E07A5F" },
-  { name: "Rose", value: "#EC4899" },
-  { name: "Violet", value: "#8B5CF6" },
-  { name: "Vert émeraude", value: "#10B981" },
-  { name: "Orange", value: "#F59E0B" },
-  { name: "Rouge", value: "#EF4444" },
-  { name: "Gris", value: "#6B7280" },
-  { name: "Blanc", value: "#FFFFFF" },
-  { name: "Noir", value: "#1A1A1A" },
-];
+import ColorLensIcon from "@mui/icons-material/ColorLens";
 
 // --- Helper pour alpha avec couleurs non supportées ---
 const safeAlpha = (color: string, opacity: number): string => {
@@ -99,23 +82,7 @@ const getSafeColor = (color: string, fallback: string = "#616637"): string => {
   return color;
 };
 
-// --- Options de compression ---
-const COMPRESSION_OPTIONS = {
-  maxSizeMB: 0.5,
-  maxWidthOrHeight: 1920,
-  useWebWorker: true,
-  fileType: "image/webp" as const,
-};
-
 // --- Interfaces ---
-interface HeroImage {
-  imageUrl: string;
-  imageId: string;
-  title: string;
-  subTitle: string;
-  color: string;
-}
-
 interface CardItem {
   title: string;
   description: string;
@@ -136,7 +103,6 @@ interface CtaButton {
 }
 
 interface PageContent {
-  image: HeroImage;
   history: {
     subTitle: string;
     title: string;
@@ -164,312 +130,13 @@ interface PageContent {
   };
 }
 
-interface PendingHeroImage {
-  file: File;
-  previewUrl: string;
-}
-
 interface EditAboutModalProps {
   open: boolean;
   onClose: () => void;
 }
 
-// --- ColorPicker Component ---
-interface ColorPickerProps {
-  value: string;
-  onChange: (color: string) => void;
-  label?: string;
-}
-
-const ColorPicker: React.FC<ColorPickerProps> = ({
-  value,
-  onChange,
-  label,
-}) => {
-  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
-  const [customColor, setCustomColor] = useState(value || "#616637");
-  const open = Boolean(anchorEl);
-  const colorInputRef = useRef<HTMLInputElement>(null);
-
-  const handleOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
-    setCustomColor(value || "#616637");
-  };
-
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
-
-  const handleColorSelect = (color: string) => {
-    onChange(color);
-    handleClose();
-  };
-
-  const handleCustomColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newColor = e.target.value;
-    setCustomColor(newColor);
-    onChange(newColor);
-  };
-
-  const isValidHex = (hex: string) => /^#([0-9A-F]{3}){1,2}$/i.test(hex);
-
-  const displayColor = getSafeColor(value, "#616637");
-
-  return (
-    <Box>
-      {label && (
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ mb: 0.5, display: "block", fontWeight: 500 }}
-        >
-          {label}
-        </Typography>
-      )}
-
-      {/* Bouton principal */}
-      <Box
-        onClick={handleOpen}
-        sx={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 1,
-          px: 1.5,
-          p: 1,
-          border: "1px solid",
-          borderColor: open ? "#616637" : "#e0e0e0",
-          borderRadius: 2,
-          cursor: "pointer",
-          bgcolor: "#fff",
-          transition: "all 0.15s",
-          minWidth: 120,
-          "&:hover": {
-            borderColor: "#616637",
-            bgcolor: "#fafafa",
-          },
-          width: "100%",
-        }}
-      >
-        <Box
-          sx={{
-            width: 22,
-            height: 22,
-            borderRadius: "4px",
-            bgcolor: displayColor,
-            border: "1px solid rgba(0,0,0,0.1)",
-            boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.2)",
-          }}
-        />
-        <Typography
-          variant="caption"
-          sx={{
-            fontFamily: "monospace",
-            color: "#555",
-            fontSize: "0.75rem",
-            flex: 1,
-          }}
-        >
-          {displayColor.toUpperCase()}
-        </Typography>
-        <PaletteIcon sx={{ fontSize: 16, color: "#999" }} />
-      </Box>
-
-      {/* Popover */}
-      <Popover
-        open={open}
-        anchorEl={anchorEl}
-        onClose={handleClose}
-        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
-        transformOrigin={{ vertical: "top", horizontal: "left" }}
-        slotProps={{
-          paper: {
-            sx: {
-              p: 2,
-              borderRadius: 3,
-              boxShadow: "0 10px 40px rgba(0,0,0,0.15)",
-              minWidth: 240,
-            },
-          },
-        }}
-      >
-        {/* Titre */}
-        <Typography
-          variant="subtitle2"
-          sx={{ mb: 1.5, fontWeight: 600, color: "#333" }}
-        >
-          Choisir une couleur
-        </Typography>
-
-        {/* Grille de couleurs */}
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: "repeat(8, 1fr)",
-            gap: 0.75,
-            mb: 2,
-          }}
-        >
-          {COLOR_PALETTE.map((color) => (
-            <Tooltip key={color.value} title={color.name} arrow placement="top">
-              <Box
-                onClick={() => handleColorSelect(color.value)}
-                sx={{
-                  width: 26,
-                  height: 26,
-                  borderRadius: "6px",
-                  bgcolor: color.value,
-                  border:
-                    value?.toLowerCase() === color.value.toLowerCase()
-                      ? "3px solid #616637"
-                      : "2px solid transparent",
-                  boxShadow:
-                    value?.toLowerCase() === color.value.toLowerCase()
-                      ? "0 0 0 2px rgba(97, 102, 55, 0.3)"
-                      : color.value === "#FFFFFF"
-                        ? "inset 0 0 0 1px #e0e0e0"
-                        : "none",
-                  cursor: "pointer",
-                  transition: "all 0.15s",
-                  "&:hover": {
-                    transform: "scale(1.15)",
-                    boxShadow: "0 3px 10px rgba(0,0,0,0.2)",
-                  },
-                }}
-              />
-            </Tooltip>
-          ))}
-        </Box>
-
-        <Divider sx={{ my: 1.5 }} />
-
-        {/* Couleur personnalisée */}
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ mb: 1, display: "block", fontWeight: 500 }}
-        >
-          Couleur personnalisée
-        </Typography>
-
-        <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-          {/* Color picker natif caché */}
-          <Box
-            onClick={() => colorInputRef.current?.click()}
-            sx={{
-              width: 36,
-              height: 36,
-              borderRadius: 2,
-              bgcolor: customColor,
-              border: "2px solid #e0e0e0",
-              cursor: "pointer",
-              transition: "all 0.15s",
-              "&:hover": {
-                borderColor: "#616637",
-                transform: "scale(1.05)",
-              },
-            }}
-          />
-          <input
-            ref={colorInputRef}
-            type="color"
-            value={customColor}
-            onChange={handleCustomColorChange}
-            style={{
-              position: "absolute",
-              opacity: 0,
-              width: 0,
-              height: 0,
-              pointerEvents: "none",
-            }}
-          />
-
-          {/* Input hex */}
-          <TextField
-            size="small"
-            value={customColor}
-            onChange={(e) => {
-              const val = e.target.value;
-              setCustomColor(val);
-              if (isValidHex(val)) {
-                onChange(val);
-              }
-            }}
-            placeholder="#616637"
-            sx={{
-              flex: 1,
-              "& .MuiInputBase-input": {
-                fontFamily: "monospace",
-                fontSize: "0.8rem",
-                py: 0.75,
-                textTransform: "uppercase",
-              },
-              "& .MuiOutlinedInput-root": {
-                borderRadius: 2,
-              },
-            }}
-          />
-
-          {/* Bouton appliquer */}
-          <Button
-            size="small"
-            variant="contained"
-            onClick={() => {
-              if (isValidHex(customColor)) {
-                handleColorSelect(customColor);
-              }
-            }}
-            disabled={!isValidHex(customColor)}
-            sx={{
-              minWidth: "auto",
-              px: 1.5,
-              bgcolor: "#616637",
-              borderRadius: 2,
-              "&:hover": { bgcolor: "#4d5129" },
-            }}
-          >
-            OK
-          </Button>
-        </Box>
-
-        {/* Prévisualisation */}
-        <Box
-          sx={{
-            mt: 2,
-            p: 1.5,
-            borderRadius: 2,
-            bgcolor: displayColor,
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <Typography
-            variant="caption"
-            sx={{
-              color:
-                displayColor === "#FFFFFF" || displayColor === "#D4C5A9"
-                  ? "#333"
-                  : "#fff",
-              fontWeight: 600,
-            }}
-          >
-            Aperçu
-          </Typography>
-        </Box>
-      </Popover>
-    </Box>
-  );
-};
-
 // --- Default Data ---
 const DEFAULT_DATA: PageContent = {
-  image: {
-    imageUrl: "/madagascar-communication-agency-team-working-toget.jpg",
-    imageId: "",
-    title: "À propos de nous",
-    subTitle: "Une agence de communication engagée pour un Madagascar meilleur",
-    color: "#616637",
-  },
   history: {
     subTitle: "NOTRE HISTOIRE",
     title: "Tolo-Tady Communication",
@@ -534,16 +201,28 @@ const DEFAULT_DATA: PageContent = {
   },
 };
 
+// --- Couleurs prédéfinies pour le color picker ---
+const PRESET_COLORS = [
+  "#616637",
+  "#8C915D",
+  "#4A4F2B",
+  "#A5AA82",
+  "#6366f1",
+  "#f59e0b",
+  "#ec4899",
+  "#14b8a6",
+  "#3b82f6",
+  "#ef4444",
+  "#10b981",
+  "#8b5cf6",
+  "#f97316",
+  "#06b6d4",
+  "#84cc16",
+  "#a855f7",
+];
+
 // --- Configuration des sections avec couleurs ---
 const SECTIONS_CONFIG = [
-  {
-    id: "panel0",
-    icon: <ImageIcon />,
-    title: "Image Hero",
-    sub: "Image principale, titre et sous-titre",
-    color: "#8b5cf6",
-    gradient: "linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%)",
-  },
   {
     id: "panel1",
     icon: <HistoryEduIcon />,
@@ -586,132 +265,441 @@ const SECTIONS_CONFIG = [
   },
 ];
 
-// --- COMPOSANTS EXTERNALISÉS (FIX CURSOR ISSUE) ---
+// =============================================================================
+// COMPOSANT COLOR PICKER OPTIMISÉ AVEC POPOVER
+// =============================================================================
+interface ColorPickerProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}
 
-// Styled TextField (nécessite isSmall en prop)
-const StyledTextField = ({ isSmall, sx, ...props }: any) => (
-  <TextField
-    {...props}
-    size={isSmall ? "small" : props.size || "small"}
-    sx={{
-      "& .MuiOutlinedInput-root": {
-        backgroundColor: "#fff",
-        borderRadius: 2,
-        transition: "all 0.2s ease",
-        "&:hover": {
-          backgroundColor: "#fafafa",
-          "& .MuiOutlinedInput-notchedOutline": {
-            borderColor: "#c7d2fe",
-          },
-        },
-        "&.Mui-focused": {
-          backgroundColor: "#fff",
-          boxShadow: "0 0 0 3px rgba(99, 102, 241, 0.1)",
-          "& .MuiOutlinedInput-notchedOutline": {
-            borderColor: "#6366f1",
-          },
-        },
-      },
-      "& .MuiInputLabel-root.Mui-focused": {
-        color: "#6366f1",
-      },
-      ...sx,
-    }}
-  />
-);
+const ColorPicker = memo<ColorPickerProps>(({ label, value, onChange }) => {
+  const theme = useTheme();
+  const isSmall = useMediaQuery(theme.breakpoints.down("sm"));
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const [tempColor, setTempColor] = useState(() =>
+    getSafeColor(value, "#616637")
+  );
+  const open = Boolean(anchorEl);
 
-// Accordion Header Component
-const AccordionHeader = ({
-  config,
-  isExpanded,
-  isSmall,
-}: {
-  config: (typeof SECTIONS_CONFIG)[0];
-  isExpanded: boolean;
-  isSmall?: boolean;
-}) => (
-  <Box
-    sx={{
-      display: "flex",
-      alignItems: "center",
-      width: "100%",
-      py: 0.5,
-      flexWrap: { xs: "wrap", sm: "nowrap" },
-      gap: { xs: 1, sm: 0 },
-    }}
-  >
-    <Avatar
-      sx={{
-        width: { xs: 36, sm: 42 },
-        height: { xs: 36, sm: 42 },
-        mr: { xs: 1.5, sm: 2 },
-        background: isExpanded
-          ? config.gradient
-          : safeAlpha(config.color, 0.1),
-        color: isExpanded ? "#fff" : config.color,
-        transition: "all 0.3s ease",
-        boxShadow: isExpanded
-          ? `0 4px 14px ${safeAlpha(config.color, 0.4)}`
-          : "none",
-      }}
-    >
-      {React.cloneElement(config.icon, {
-        sx: { fontSize: { xs: 18, sm: 22 } },
-      })}
-    </Avatar>
-    <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-      <Typography
-        variant="subtitle1"
-        fontWeight={700}
-        sx={{
-          color: isExpanded ? config.color : "text.primary",
-          transition: "color 0.3s ease",
-          fontSize: { xs: "0.875rem", sm: "1rem" },
-          lineHeight: 1.3,
-        }}
-        noWrap
-      >
-        {config.title}
-      </Typography>
-      <Typography
-        variant="caption"
-        color="text.secondary"
-        sx={{
-          display: { xs: "none", sm: "block" },
-          fontSize: { xs: "0.7rem", sm: "0.75rem" },
-        }}
-      >
-        {config.sub}
-      </Typography>
-    </Box>
-    {isExpanded && !isSmall && (
-      <Chip
-        label="En cours"
+  // Sync avec la valeur externe
+  useEffect(() => {
+    setTempColor(getSafeColor(value, "#616637"));
+  }, [value]);
+
+  const handleClick = useCallback((e: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(e.currentTarget);
+  }, []);
+
+  const handleClose = useCallback(() => {
+    setAnchorEl(null);
+    if (tempColor !== value) {
+      onChange(tempColor);
+    }
+  }, [tempColor, value, onChange]);
+
+  const handlePresetClick = useCallback(
+    (color: string) => {
+      setTempColor(color);
+      onChange(color);
+      setAnchorEl(null);
+    },
+    [onChange]
+  );
+
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const newValue = e.target.value;
+      if (/^#[0-9A-Fa-f]{0,6}$/.test(newValue) || newValue === "") {
+        setTempColor(newValue || "#");
+      }
+    },
+    []
+  );
+
+  const handleColorInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setTempColor(e.target.value);
+    },
+    []
+  );
+
+  return (
+    <>
+      <TextField
+        label={label}
+        value={tempColor}
+        onClick={handleClick}
+        fullWidth
         size="small"
+        InputProps={{
+          readOnly: true,
+          startAdornment: (
+            <Box
+              sx={{
+                width: { xs: 20, sm: 24 },
+                height: { xs: 20, sm: 24 },
+                borderRadius: 1,
+                bgcolor: tempColor,
+                border: "2px solid #e2e8f0",
+                mr: 1,
+                cursor: "pointer",
+                flexShrink: 0,
+              }}
+            />
+          ),
+          endAdornment: (
+            <ColorLensIcon
+              sx={{
+                color: tempColor,
+                fontSize: { xs: 18, sm: 20 },
+                opacity: 0.7,
+              }}
+            />
+          ),
+        }}
         sx={{
-          bgcolor: safeAlpha(config.color, 0.1),
-          color: config.color,
-          fontWeight: 600,
-          mr: 1,
-          fontSize: "0.7rem",
+          "& .MuiOutlinedInput-root": {
+            backgroundColor: "#fff",
+            borderRadius: 2,
+            cursor: "pointer",
+            transition: "all 0.2s ease",
+            "&:hover": {
+              backgroundColor: "#fafafa",
+              "& .MuiOutlinedInput-notchedOutline": {
+                borderColor: tempColor,
+              },
+            },
+          },
+          "& input": {
+            cursor: "pointer",
+            fontFamily: "monospace",
+            fontSize: { xs: "0.75rem", sm: "0.875rem" },
+          },
         }}
       />
-    )}
-  </Box>
+
+      <Popover
+        open={open}
+        anchorEl={anchorEl}
+        onClose={handleClose}
+        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+        transformOrigin={{ vertical: "top", horizontal: "left" }}
+        PaperProps={{
+          sx: {
+            p: { xs: 1.5, sm: 2 },
+            borderRadius: 3,
+            minWidth: { xs: 260, sm: 280 },
+            maxWidth: 320,
+            boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
+          },
+        }}
+      >
+        {/* Header */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            mb: 1.5,
+          }}
+        >
+          <Typography
+            variant="subtitle2"
+            fontWeight={700}
+            sx={{ fontSize: { xs: "0.8rem", sm: "0.875rem" } }}
+          >
+            Choisir une couleur
+          </Typography>
+          <IconButton size="small" onClick={handleClose}>
+            <CloseIcon sx={{ fontSize: 18 }} />
+          </IconButton>
+        </Box>
+
+        {/* Couleurs prédéfinies */}
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ mb: 1, display: "block", fontWeight: 500 }}
+        >
+          Couleurs prédéfinies
+        </Typography>
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: "repeat(8, 1fr)",
+            gap: 0.75,
+            mb: 2,
+          }}
+        >
+          {PRESET_COLORS.map((color) => (
+            <Tooltip key={color} title={color} arrow placement="top">
+              <Box
+                onClick={() => handlePresetClick(color)}
+                sx={{
+                  width: { xs: 28, sm: 32 },
+                  height: { xs: 28, sm: 32 },
+                  borderRadius: 1.5,
+                  bgcolor: color,
+                  cursor: "pointer",
+                  border:
+                    tempColor.toLowerCase() === color.toLowerCase()
+                      ? "3px solid #1a1a1a"
+                      : "2px solid #e2e8f0",
+                  transition: "all 0.15s ease",
+                  "&:hover": {
+                    transform: "scale(1.15)",
+                    boxShadow: `0 4px 12px ${safeAlpha(color, 0.5)}`,
+                    zIndex: 1,
+                  },
+                }}
+              />
+            </Tooltip>
+          ))}
+        </Box>
+
+        <Divider sx={{ my: 1.5 }} />
+
+        {/* Couleur personnalisée */}
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ mb: 1, display: "block", fontWeight: 500 }}
+        >
+          Couleur personnalisée
+        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Box
+            component="input"
+            type="color"
+            value={tempColor.length === 7 ? tempColor : "#616637"}
+            onChange={handleColorInputChange}
+            sx={{
+              width: { xs: 44, sm: 50 },
+              height: { xs: 36, sm: 40 },
+              border: "2px solid #e2e8f0",
+              borderRadius: 2,
+              cursor: "pointer",
+              padding: 0,
+              overflow: "hidden",
+              "&::-webkit-color-swatch-wrapper": { padding: 0 },
+              "&::-webkit-color-swatch": {
+                border: "none",
+                borderRadius: 1,
+              },
+            }}
+          />
+          <TextField
+            size="small"
+            value={tempColor}
+            onChange={handleInputChange}
+            placeholder="#616637"
+            sx={{
+              flex: 1,
+              "& input": {
+                fontFamily: "monospace",
+                fontSize: { xs: "0.8rem", sm: "0.875rem" },
+                textTransform: "uppercase",
+              },
+              "& .MuiOutlinedInput-root": {
+                borderRadius: 2,
+              },
+            }}
+          />
+        </Box>
+
+        {/* Aperçu et bouton appliquer */}
+        <Box sx={{ mt: 2, display: "flex", gap: 1, alignItems: "center" }}>
+          <Box
+            sx={{
+              flex: 1,
+              height: 36,
+              borderRadius: 2,
+              bgcolor: tempColor,
+              border: "1px solid #e2e8f0",
+            }}
+          />
+          <Button
+            variant="contained"
+            size="small"
+            onClick={handleClose}
+            startIcon={<CheckCircleIcon sx={{ fontSize: 16 }} />}
+            sx={{
+              bgcolor: tempColor,
+              color:
+                parseInt(tempColor.slice(1), 16) > 0xffffff / 2
+                  ? "#1a1a1a"
+                  : "#fff",
+              textTransform: "none",
+              fontWeight: 600,
+              borderRadius: 2,
+              px: 2,
+              "&:hover": {
+                bgcolor: tempColor,
+                opacity: 0.9,
+              },
+            }}
+          >
+            OK
+          </Button>
+        </Box>
+      </Popover>
+    </>
+  );
+});
+
+ColorPicker.displayName = "ColorPicker";
+
+// =============================================================================
+// COMPOSANT STYLED TEXTFIELD MÉMORISÉ
+// =============================================================================
+interface StyledTextFieldProps {
+  fullWidth?: boolean;
+  label?: string;
+  value?: string;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  multiline?: boolean;
+  rows?: number;
+  placeholder?: string;
+  size?: "small" | "medium";
+  InputProps?: any;
+  sx?: any;
+}
+
+const StyledTextField = memo<StyledTextFieldProps>((props) => {
+  const theme = useTheme();
+  const isSmall = useMediaQuery(theme.breakpoints.down("sm"));
+
+  return (
+    <TextField
+      {...props}
+      size={isSmall ? "small" : props.size || "small"}
+      sx={{
+        "& .MuiOutlinedInput-root": {
+          backgroundColor: "#fff",
+          borderRadius: 2,
+          transition: "all 0.2s ease",
+          "&:hover": {
+            backgroundColor: "#fafafa",
+            "& .MuiOutlinedInput-notchedOutline": {
+              borderColor: "#c7d2fe",
+            },
+          },
+          "&.Mui-focused": {
+            backgroundColor: "#fff",
+            boxShadow: "0 0 0 3px rgba(99, 102, 241, 0.1)",
+            "& .MuiOutlinedInput-notchedOutline": {
+              borderColor: "#6366f1",
+            },
+          },
+        },
+        "& .MuiInputLabel-root.Mui-focused": {
+          color: "#6366f1",
+        },
+        ...props.sx,
+      }}
+    />
+  );
+});
+
+StyledTextField.displayName = "StyledTextField";
+
+// =============================================================================
+// COMPOSANT ACCORDION HEADER MÉMORISÉ
+// =============================================================================
+interface AccordionHeaderProps {
+  config: (typeof SECTIONS_CONFIG)[0];
+  isExpanded: boolean;
+  isSmall: boolean;
+}
+
+const AccordionHeader = memo<AccordionHeaderProps>(
+  ({ config, isExpanded, isSmall }) => (
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        width: "100%",
+        py: 0.5,
+        flexWrap: { xs: "wrap", sm: "nowrap" },
+        gap: { xs: 1, sm: 0 },
+      }}
+    >
+      <Avatar
+        sx={{
+          width: { xs: 36, sm: 42 },
+          height: { xs: 36, sm: 42 },
+          mr: { xs: 1.5, sm: 2 },
+          background: isExpanded
+            ? config.gradient
+            : safeAlpha(config.color, 0.1),
+          color: isExpanded ? "#fff" : config.color,
+          transition: "all 0.3s ease",
+          boxShadow: isExpanded
+            ? `0 4px 14px ${safeAlpha(config.color, 0.4)}`
+            : "none",
+        }}
+      >
+        {React.cloneElement(config.icon, {
+          sx: { fontSize: { xs: 18, sm: 22 } },
+        })}
+      </Avatar>
+      <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+        <Typography
+          variant="subtitle1"
+          fontWeight={700}
+          sx={{
+            color: isExpanded ? config.color : "text.primary",
+            transition: "color 0.3s ease",
+            fontSize: { xs: "0.875rem", sm: "1rem" },
+            lineHeight: 1.3,
+          }}
+          noWrap
+        >
+          {config.title}
+        </Typography>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{
+            display: { xs: "none", sm: "block" },
+            fontSize: { xs: "0.7rem", sm: "0.75rem" },
+          }}
+        >
+          {config.sub}
+        </Typography>
+      </Box>
+      {isExpanded && !isSmall && (
+        <Chip
+          label="En cours"
+          size="small"
+          sx={{
+            bgcolor: safeAlpha(config.color, 0.1),
+            color: config.color,
+            fontWeight: 600,
+            mr: 1,
+            fontSize: "0.7rem",
+          }}
+        />
+      )}
+    </Box>
+  )
 );
 
-// Item Card Component
-const ItemCard = ({
-  children,
-  onDelete,
-  color,
-  index,
-}: {
+AccordionHeader.displayName = "AccordionHeader";
+
+// =============================================================================
+// COMPOSANT ITEM CARD MÉMORISÉ
+// =============================================================================
+interface ItemCardProps {
   children: React.ReactNode;
   onDelete: () => void;
   color: string;
   index: number;
-}) => {
+}
+
+const ItemCard = memo<ItemCardProps>(({ children, onDelete, color, index }) => {
   const safeColor = getSafeColor(color, "#616637");
 
   return (
@@ -769,29 +757,28 @@ const ItemCard = ({
       <Box sx={{ pt: { xs: 2.5, sm: 3 } }}>{children}</Box>
     </Paper>
   );
-};
+});
 
+ItemCard.displayName = "ItemCard";
 
+// =============================================================================
+// COMPOSANT PRINCIPAL
+// =============================================================================
 const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down("md"));
   const isSmall = useMediaQuery(theme.breakpoints.down("sm"));
-  const [expanded, setExpanded] = useState<string | false>("panel0");
+  const [expanded, setExpanded] = useState<string | false>("panel1");
 
   // États
   const [formData, setFormData] = useState<PageContent | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [toast, setToast] = useState<{
     msg: string;
     type: "success" | "error" | "warning" | "info";
   } | null>(null);
-
-  // État pour l'image hero en attente
-  const [pendingHeroImage, setPendingHeroImage] =
-    useState<PendingHeroImage | null>(null);
 
   // Firebase Sync
   useEffect(() => {
@@ -805,13 +792,6 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
         if (snapshot.exists()) {
           const data = snapshot.data() as PageContent;
           setFormData({
-            image: {
-              imageUrl: data.image?.imageUrl || DEFAULT_DATA.image.imageUrl,
-              imageId: data.image?.imageId || DEFAULT_DATA.image.imageId,
-              title: data.image?.title || DEFAULT_DATA.image.title,
-              subTitle: data.image?.subTitle || DEFAULT_DATA.image.subTitle,
-              color: data.image?.color || DEFAULT_DATA.image.color,
-            },
             history: {
               subTitle: data.history?.subTitle || DEFAULT_DATA.history.subTitle,
               title: data.history?.title || DEFAULT_DATA.history.title,
@@ -871,267 +851,184 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
         console.error("Erreur Firebase:", error);
         setToast({ msg: "Erreur de connexion", type: "error" });
         setLoading(false);
-      },
+      }
     );
 
     return () => unsubscribe();
   }, [open]);
 
-  // Cleanup des blob URLs
-  useEffect(() => {
-    return () => {
-      if (pendingHeroImage) {
-        URL.revokeObjectURL(pendingHeroImage.previewUrl);
-      }
-    };
-  }, []);
-
-  const handleChangePanel =
+  const handleChangePanel = useCallback(
     (panel: string) => (_: React.SyntheticEvent, isExpanded: boolean) => {
       setExpanded(isExpanded ? panel : false);
-    };
+    },
+    []
+  );
 
-  // --- Gestionnaires Image Hero ---
-  const handleHeroImageSelect = (file: File) => {
-    if (!formData) return;
-
-    if (pendingHeroImage) {
-      URL.revokeObjectURL(pendingHeroImage.previewUrl);
-    }
-
-    const previewUrl = URL.createObjectURL(file);
-    setPendingHeroImage({ file, previewUrl });
-
-    setFormData({
-      ...formData,
-      image: { ...formData.image, imageUrl: previewUrl },
-    });
-    setHasChanges(true);
-
-    setToast({
-      msg: "Image sélectionnée. Cliquez sur 'Sauvegarder' pour confirmer.",
-      type: "info",
-    });
-  };
-
-  const handleHeroImageChange = (field: keyof HeroImage, value: string) => {
-    if (!formData) return;
-    setFormData({
-      ...formData,
-      image: { ...formData.image, [field]: value },
-    });
-    setHasChanges(true);
-  };
-
-  const handleCancelPendingHeroImage = () => {
-    if (!formData || !pendingHeroImage) return;
-
-    URL.revokeObjectURL(pendingHeroImage.previewUrl);
-
-    setFormData({
-      ...formData,
-      image: { ...formData.image, imageUrl: DEFAULT_DATA.image.imageUrl },
-    });
-
-    setPendingHeroImage(null);
-    setToast({ msg: "Image en attente annulée", type: "info" });
-  };
-
-  // --- Gestionnaires autres sections ---
-  const handleSimpleSectionChange = (
-    section: "history" | "approach" | "cta",
-    field: string,
-    value: string,
-  ) => {
-    if (!formData) return;
-    setFormData({
-      ...formData,
-      [section]: {
-        ...(formData[section] as object),
-        [field]: value,
-      },
-    });
-    setHasChanges(true);
-  };
-
-  const handleCardChange = (
-    index: number,
-    field: "title" | "description" | "color",
-    value: string,
-  ) => {
-    if (!formData) return;
-    const newCards = [...formData.cards];
-    newCards[index] = { ...newCards[index], [field]: value };
-    setFormData({ ...formData, cards: newCards });
-    setHasChanges(true);
-  };
-
-  const handleValueItemChange = (
-    index: number,
-    field: "title" | "description" | "color",
-    value: string,
-  ) => {
-    if (!formData) return;
-    const newItems = [...formData.values.items];
-    newItems[index] = { ...newItems[index], [field]: value };
-    setFormData({
-      ...formData,
-      values: { ...formData.values, items: newItems },
-    });
-    setHasChanges(true);
-  };
-
-  const handleValuesHeaderChange = (field: string, value: string) => {
-    if (!formData) return;
-    setFormData({
-      ...formData,
-      values: { ...formData.values, [field]: value },
-    });
-    setHasChanges(true);
-  };
-
-  const handleAddCard = () => {
-    if (!formData) return;
-    const newCard: CardItem = { title: "", description: "", color: "#616637" };
-    setFormData({ ...formData, cards: [...formData.cards, newCard] });
-    setHasChanges(true);
-  };
-
-  const handleRemoveCard = (index: number) => {
-    if (!formData) return;
-    setFormData({
-      ...formData,
-      cards: formData.cards.filter((_, i) => i !== index),
-    });
-    setHasChanges(true);
-  };
-
-  const handleAddValueItem = () => {
-    if (!formData) return;
-    const newItem: ValueItem = { title: "", description: "", color: "#616637" };
-    setFormData({
-      ...formData,
-      values: {
-        ...formData.values,
-        items: [...formData.values.items, newItem],
-      },
-    });
-    setHasChanges(true);
-  };
-
-  const handleRemoveValueItem = (index: number) => {
-    if (!formData) return;
-    setFormData({
-      ...formData,
-      values: {
-        ...formData.values,
-        items: formData.values.items.filter((_, i) => i !== index),
-      },
-    });
-    setHasChanges(true);
-  };
-
-  const handleCtaButtonChange = (
-    index: number,
-    field: keyof CtaButton,
-    value: string,
-  ) => {
-    if (!formData) return;
-    const newButtons = [...formData.cta.buttons];
-    newButtons[index] = { ...newButtons[index], [field]: value };
-    setFormData({ ...formData, cta: { ...formData.cta, buttons: newButtons } });
-    setHasChanges(true);
-  };
-
-  const handleAddCtaButton = () => {
-    if (!formData) return;
-    setFormData({
-      ...formData,
-      cta: {
-        ...formData.cta,
-        buttons: [
-          ...formData.cta.buttons,
-          {
-            label: "Action",
-            href: "#",
-            bgColor: "#616637",
-            textColor: "#ffffff",
+  // --- Gestionnaires optimisés avec useCallback ---
+  const handleSimpleSectionChange = useCallback(
+    (section: "history" | "approach" | "cta", field: string, value: string) => {
+      setFormData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          [section]: {
+            ...(prev[section] as object),
+            [field]: value,
           },
-        ],
-      },
+        };
+      });
+      setHasChanges(true);
+    },
+    []
+  );
+
+  const handleCardChange = useCallback(
+    (index: number, field: "title" | "description" | "color", value: string) => {
+      setFormData((prev) => {
+        if (!prev) return prev;
+        const newCards = [...prev.cards];
+        newCards[index] = { ...newCards[index], [field]: value };
+        return { ...prev, cards: newCards };
+      });
+      setHasChanges(true);
+    },
+    []
+  );
+
+  const handleValueItemChange = useCallback(
+    (index: number, field: "title" | "description" | "color", value: string) => {
+      setFormData((prev) => {
+        if (!prev) return prev;
+        const newItems = [...prev.values.items];
+        newItems[index] = { ...newItems[index], [field]: value };
+        return {
+          ...prev,
+          values: { ...prev.values, items: newItems },
+        };
+      });
+      setHasChanges(true);
+    },
+    []
+  );
+
+  const handleValuesHeaderChange = useCallback(
+    (field: string, value: string) => {
+      setFormData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          values: { ...prev.values, [field]: value },
+        };
+      });
+      setHasChanges(true);
+    },
+    []
+  );
+
+  const handleAddCard = useCallback(() => {
+    setFormData((prev) => {
+      if (!prev) return prev;
+      const newCard: CardItem = { title: "", description: "", color: "#616637" };
+      return { ...prev, cards: [...prev.cards, newCard] };
     });
     setHasChanges(true);
-  };
+  }, []);
 
-  const handleRemoveCtaButton = (index: number) => {
-    if (!formData) return;
-    setFormData({
-      ...formData,
-      cta: {
-        ...formData.cta,
-        buttons: formData.cta.buttons.filter((_, i) => i !== index),
-      },
+  const handleRemoveCard = useCallback((index: number) => {
+    setFormData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        cards: prev.cards.filter((_, i) => i !== index),
+      };
     });
     setHasChanges(true);
-  };
+  }, []);
 
-  // --- Sauvegarde ---
-  const handleSubmit = async () => {
+  const handleAddValueItem = useCallback(() => {
+    setFormData((prev) => {
+      if (!prev) return prev;
+      const newItem: ValueItem = { title: "", description: "", color: "#616637" };
+      return {
+        ...prev,
+        values: {
+          ...prev.values,
+          items: [...prev.values.items, newItem],
+        },
+      };
+    });
+    setHasChanges(true);
+  }, []);
+
+  const handleRemoveValueItem = useCallback((index: number) => {
+    setFormData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        values: {
+          ...prev.values,
+          items: prev.values.items.filter((_, i) => i !== index),
+        },
+      };
+    });
+    setHasChanges(true);
+  }, []);
+
+  const handleCtaButtonChange = useCallback(
+    (index: number, field: keyof CtaButton, value: string) => {
+      setFormData((prev) => {
+        if (!prev) return prev;
+        const newButtons = [...prev.cta.buttons];
+        newButtons[index] = { ...newButtons[index], [field]: value };
+        return { ...prev, cta: { ...prev.cta, buttons: newButtons } };
+      });
+      setHasChanges(true);
+    },
+    []
+  );
+
+  const handleAddCtaButton = useCallback(() => {
+    setFormData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        cta: {
+          ...prev.cta,
+          buttons: [
+            ...prev.cta.buttons,
+            {
+              label: "Action",
+              href: "#",
+              bgColor: "#616637",
+              textColor: "#ffffff",
+            },
+          ],
+        },
+      };
+    });
+    setHasChanges(true);
+  }, []);
+
+  const handleRemoveCtaButton = useCallback((index: number) => {
+    setFormData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        cta: {
+          ...prev.cta,
+          buttons: prev.cta.buttons.filter((_, i) => i !== index),
+        },
+      };
+    });
+    setHasChanges(true);
+  }, []);
+
+  const handleSubmit = useCallback(async () => {
     if (!formData) return;
     setSaving(true);
-    setUploading(!!pendingHeroImage);
 
     try {
-      let finalImageData = { ...formData.image };
-
-      if (pendingHeroImage) {
-        try {
-          const compressedFile = await imageCompression(
-            pendingHeroImage.file,
-            COMPRESSION_OPTIONS,
-          );
-
-          const formDataUpload = new FormData();
-          formDataUpload.append("file", compressedFile);
-
-          if (formData.image.imageId) {
-            formDataUpload.append("publicId", formData.image.imageId);
-          }
-
-          // Appel à la nouvelle route fullabout
-          const res = await fetch("/api/cloudinary/uploadweb/fullabout", {
-            method: "POST",
-            body: formDataUpload,
-          });
-
-          const resData = await res.json();
-
-          if (!res.ok) {
-            throw new Error(resData.error || "Erreur upload");
-          }
-
-          finalImageData = {
-            ...finalImageData,
-            imageUrl: resData.imageUrl,
-            imageId: resData.imagePublicId || resData.publicId || "",
-          };
-
-          URL.revokeObjectURL(pendingHeroImage.previewUrl);
-          setPendingHeroImage(null);
-        } catch (uploadError: any) {
-          console.error("Erreur upload image hero:", uploadError);
-          setToast({
-            msg: "Erreur lors de l'upload de l'image",
-            type: "error",
-          });
-          setSaving(false);
-          setUploading(false);
-          return;
-        }
-      }
-
       await updateDoc(doc(db, "website_content", "full_about"), {
-        image: finalImageData,
         history: formData.history,
         cards: formData.cards,
         values: formData.values,
@@ -1139,7 +1036,6 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
         cta: formData.cta,
       });
 
-      setFormData({ ...formData, image: finalImageData });
       setToast({ msg: "Sauvegarde réussie !", type: "success" });
       setHasChanges(false);
     } catch (error: any) {
@@ -1147,30 +1043,22 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
       setToast({ msg: error.message || "Erreur de sauvegarde", type: "error" });
     } finally {
       setSaving(false);
-      setUploading(false);
     }
-  };
+  }, [formData]);
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     if (hasChanges) {
       if (
         window.confirm(
-          "Vous avez des modifications non sauvegardées. Voulez-vous vraiment fermer ?",
+          "Vous avez des modifications non sauvegardées. Voulez-vous vraiment fermer ?"
         )
       ) {
-        if (pendingHeroImage) {
-          URL.revokeObjectURL(pendingHeroImage.previewUrl);
-          setPendingHeroImage(null);
-        }
         onClose();
       }
     } else {
       onClose();
     }
-  };
-
-  // Les composants StyledTextField, AccordionHeader et ItemCard ont été supprimés d'ici
-  // et déplacés avant la déclaration de EditAboutModal
+  }, [hasChanges, onClose]);
 
   // Loading state
   if (loading || !formData) {
@@ -1279,22 +1167,12 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
               </Box>
             </Box>
             <Stack direction="row" spacing={1} alignItems="center">
-              {(hasChanges || pendingHeroImage) && (
+              {hasChanges && (
                 <Chip
-                  label={
-                    isSmall
-                      ? pendingHeroImage
-                        ? "📷"
-                        : "!"
-                      : pendingHeroImage
-                        ? "Image en attente"
-                        : "Non sauvegardé"
-                  }
+                  label={isSmall ? "!" : "Non sauvegardé"}
                   size="small"
                   sx={{
-                    bgcolor: pendingHeroImage
-                      ? "#ed6c02"
-                      : "rgba(255,255,255,0.2)",
+                    bgcolor: "rgba(255,255,255,0.2)",
                     color: "#fff",
                     fontWeight: 600,
                     fontSize: { xs: "0.65rem", sm: "0.75rem" },
@@ -1318,10 +1196,10 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
 
         {/* --- CONTENT --- */}
         <DialogContent sx={{ p: 0, bgcolor: "#f8fafc" }}>
-          {/* SECTION 0: IMAGE HERO */}
+          {/* SECTION 1: HISTOIRE */}
           <Accordion
-            expanded={expanded === "panel0"}
-            onChange={handleChangePanel("panel0")}
+            expanded={expanded === "panel1"}
+            onChange={handleChangePanel("panel1")}
             elevation={0}
             sx={{
               borderBottom: "1px solid #e2e8f0",
@@ -1336,7 +1214,7 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                 <ExpandMoreIcon
                   sx={{
                     color:
-                      expanded === "panel0"
+                      expanded === "panel1"
                         ? SECTIONS_CONFIG[0].color
                         : "inherit",
                     fontSize: { xs: 20, sm: 24 },
@@ -1347,273 +1225,6 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
             >
               <AccordionHeader
                 config={SECTIONS_CONFIG[0]}
-                isExpanded={expanded === "panel0"}
-                isSmall={isSmall}
-              />
-            </AccordionSummary>
-            <AccordionDetails
-              sx={{ px: { xs: 2, sm: 3 }, pb: { xs: 3, sm: 4 } }}
-            >
-              <Grid container >
-                {/* Prévisualisation de l'image */}
-
-                <Grid item xs={12} md={5} px={1} position={"relative"}>
-                  <Grid
-                    right={9}
-                    position="absolute"
-                    zIndex={99}
-                    justifyContent="flex-end"
-                    top={30}
-                    p={1}
-                    
-                  >
-                    {" "}
-                    <Button
-                      component="label"
-                      variant="outlined"
-                      size="small"
-                      startIcon={
-                        pendingHeroImage ? (
-                          <HourglassEmptyIcon sx={{ fontSize: 14 }} />
-                        ) : (
-                          <CloudUploadIcon sx={{ fontSize: 14 }} />
-                        )
-                      }
-                      sx={{
-                        minHeight: 28,
-                        px: 1.2,
-                        py: 0.3,
-                        fontSize: "0.7rem",
-                        borderRadius: 1.5,
-                        textTransform: "none",
-                        fontWeight: 600,
-
-                        borderColor: pendingHeroImage
-                          ? "#ed6c02"
-                          : "white",
-                        color: pendingHeroImage
-                          ? "#ed6c02"
-                          : "white",
-
-                        "& .MuiButton-startIcon": {
-                          marginRight: 0.5,
-                        },
-
-                        "&:hover": {
-                          bgcolor: 
-                            pendingHeroImage
-                              ? "#ed6c02"
-                              : "#e2e2d7",
-                              color:pendingHeroImage
-                              ? "#ffffff"
-                              : "#616637",
-                        },
-                      }}  
-                    >
-                      {pendingHeroImage ? "Changer" : "Image"}
-                      <input
-                        hidden
-                        accept="image/*"
-                        type="file"
-                        onChange={(e) =>
-                          e.target.files?.[0] &&
-                          handleHeroImageSelect(e.target.files[0])
-                        }
-                      />
-                    </Button>
-                  </Grid>
-                  <Typography
-                    variant="subtitle2"
-                    sx={{
-                      fontWeight: 600,
-                      mb: 0.5,
-                      fontSize: { xs: "0.875rem", sm: "1rem" },
-                    }}
-                  >
-                    Image Hero
-                  </Typography>
-                  <Box
-                    sx={{
-                      width: "100%",
-                      aspectRatio: { xs: "16/9", md: "16/9" },
-                      bgcolor: "#f1f5f9",
-                      // borderRadius: { xs: 2, md: 3 },
-                      overflow: "hidden",
-                      position: "relative",
-                      border: pendingHeroImage
-                        ? `3px dashed #ed6c02`
-                        : `2px dashed ${SECTIONS_CONFIG[0].color}`,
-                      transition: "all 0.3s ease",
-                    }}
-                  >
-                    {formData.image.imageUrl ? (
-                      <>
-                        <Box
-                          sx={{
-                            width: "100%",
-                            height: "100%",
-                            backgroundImage: `
-                                  linear-gradient(
-                                    ${formData.image.color}99,
-                                    ${formData.image.color}99
-                                  ),
-                                  url(${formData.image.imageUrl})
-                                `,
-                            backgroundSize: "cover",
-                            backgroundPosition: "center",
-                            backgroundRepeat: "no-repeat",
-
-                            display: "flex",
-                            justifyContent: "center",
-                            alignItems: "center",
-                            position: "relative",
-                          }}
-                        >
-                          <Box
-                            sx={{
-                              p: { xs: 1.5, sm: 2 },
-
-                              color: "#fff",
-                            }}
-                          >
-                            <Typography
-                              variant="h6"
-                              fontWeight={700}
-                              textAlign={"center"}
-                              sx={{
-                                fontSize: { xs: "0.875rem", sm: "1.1rem" },
-                                color: "#ffffff",
-                              }}
-                            >
-                              {formData.image.title || "Titre"}
-                            </Typography>
-                            <Typography
-                              variant="body2"
-                              sx={{
-                                fontSize: { xs: "0.7rem", sm: "0.8rem" },
-                                opacity: 0.9,
-                              }}
-                              textAlign={"center"}
-                            >
-                              {formData.image.subTitle || "Sous-titre"}
-                            </Typography>
-                          </Box>
-                        </Box>
-                        {pendingHeroImage && (
-                          <Chip
-                            icon={<HourglassEmptyIcon sx={{ fontSize: 14 }} />}
-                            label="Non enregistrée"
-                            size="small"
-                            onDelete={handleCancelPendingHeroImage}
-                            sx={{
-                              position: "absolute",
-                              top: 8,
-                              left: 8,
-                              bgcolor: "#ed6c02",
-                              color: "#fff",
-                              fontWeight: 600,
-                              fontSize: "0.65rem",
-                              "& .MuiChip-deleteIcon": {
-                                color: "#fff",
-                                "&:hover": { color: "#ffcdd2" },
-                              },
-                            }}
-                          />
-                        )}
-                      </>
-                    ) : (
-                      <Stack
-                        alignItems="center"
-                        justifyContent="center"
-                        sx={{ height: "100%", gap: 1 }}
-                      >
-                        <ImageIcon
-                          sx={{
-                            fontSize: { xs: 40, sm: 60 },
-                            color: "#94a3b8",
-                          }}
-                        />
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          sx={{ fontSize: { xs: "0.75rem", sm: "0.875rem" } }}
-                        >
-                          Aucune image
-                        </Typography>
-                      </Stack>
-                    )}
-                  </Box>
-                </Grid>
-
-                {/* Champs texte */}
-                <Grid item xs={12} md={7} p={2}>
-                  <Stack spacing={{ xs: 1.5, sm: 2 }}>
-                    <StyledTextField
-                      isSmall={isSmall}
-                      fullWidth
-                      label="Titre de la page"
-                      value={formData.image.title}
-                      onChange={(e: any) =>
-                        handleHeroImageChange("title", e.target.value)
-                      }
-                      placeholder="Ex: À propos de nous"
-                    />
-                    <StyledTextField
-                      isSmall={isSmall}
-                      fullWidth
-                      label="Sous-titre"
-                      value={formData.image.subTitle}
-                      onChange={(e: any) =>
-                        handleHeroImageChange("subTitle", e.target.value)
-                      }
-                      multiline
-                      rows={2}
-                      placeholder="Ex: Une agence de communication engagée..."
-                    />
-                    <Box sx={{ width: "100%" }}>
-                      <ColorPicker
-                        label="Couleur du titre"
-                        value={formData.image.color}
-                        onChange={(value) =>
-                          handleHeroImageChange("color", value)
-                        }
-                      />
-                    </Box>
-                  </Stack>
-                </Grid>
-              </Grid>
-            </AccordionDetails>
-          </Accordion>
-
-          {/* SECTION 1: HISTOIRE */}
-          <Accordion
-            expanded={expanded === "panel1"}
-            onChange={handleChangePanel("panel1")}
-            elevation={0}
-            sx={{
-              borderBottom: "1px solid #e2e8f0",
-              "&::before": { display: "none" },
-              "&.Mui-expanded": {
-                bgcolor: safeAlpha(SECTIONS_CONFIG[1].color, 0.02),
-              },
-            }}
-          >
-            <AccordionSummary
-              expandIcon={
-                <ExpandMoreIcon
-                  sx={{
-                    color:
-                      expanded === "panel1"
-                        ? SECTIONS_CONFIG[1].color
-                        : "inherit",
-                    fontSize: { xs: 20, sm: 24 },
-                  }}
-                />
-              }
-              sx={{ px: { xs: 2, sm: 3 }, py: 1 }}
-            >
-              <AccordionHeader
-                config={SECTIONS_CONFIG[1]}
                 isExpanded={expanded === "panel1"}
                 isSmall={isSmall}
               />
@@ -1624,7 +1235,6 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
               <Grid container spacing={{ xs: 1.5, sm: 2.5 }}>
                 <Grid item xs={12} sm={6} md={4}>
                   <StyledTextField
-                    isSmall={isSmall}
                     fullWidth
                     label="Sur-titre"
                     value={formData.history.subTitle}
@@ -1632,14 +1242,13 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                       handleSimpleSectionChange(
                         "history",
                         "subTitle",
-                        e.target.value,
+                        e.target.value
                       )
                     }
                   />
                 </Grid>
                 <Grid item xs={12} sm={6} md={5}>
                   <StyledTextField
-                    isSmall={isSmall}
                     fullWidth
                     label="Titre Principal"
                     value={formData.history.title}
@@ -1647,7 +1256,7 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                       handleSimpleSectionChange(
                         "history",
                         "title",
-                        e.target.value,
+                        e.target.value
                       )
                     }
                   />
@@ -1663,7 +1272,6 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                 </Grid>
                 <Grid item xs={12}>
                   <StyledTextField
-                    isSmall={isSmall}
                     fullWidth
                     multiline
                     rows={isSmall ? 3 : 4}
@@ -1673,7 +1281,7 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                       handleSimpleSectionChange(
                         "history",
                         "description",
-                        e.target.value,
+                        e.target.value
                       )
                     }
                     placeholder="Racontez l'histoire de votre entreprise..."
@@ -1692,7 +1300,7 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
               borderBottom: "1px solid #e2e8f0",
               "&::before": { display: "none" },
               "&.Mui-expanded": {
-                bgcolor: safeAlpha(SECTIONS_CONFIG[2].color, 0.02),
+                bgcolor: safeAlpha(SECTIONS_CONFIG[1].color, 0.02),
               },
             }}
           >
@@ -1702,7 +1310,7 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                   sx={{
                     color:
                       expanded === "panel2"
-                        ? SECTIONS_CONFIG[2].color
+                        ? SECTIONS_CONFIG[1].color
                         : "inherit",
                     fontSize: { xs: 20, sm: 24 },
                   }}
@@ -1711,7 +1319,7 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
               sx={{ px: { xs: 2, sm: 3 }, py: 1 }}
             >
               <AccordionHeader
-                config={SECTIONS_CONFIG[2]}
+                config={SECTIONS_CONFIG[1]}
                 isExpanded={expanded === "panel2"}
                 isSmall={isSmall}
               />
@@ -1732,12 +1340,15 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                   variant="contained"
                   size={isSmall ? "small" : "small"}
                   sx={{
-                    background: SECTIONS_CONFIG[2].gradient,
+                    background: SECTIONS_CONFIG[1].gradient,
                     borderRadius: 2,
                     textTransform: "none",
                     fontWeight: 600,
                     fontSize: { xs: "0.75rem", sm: "0.875rem" },
-                    boxShadow: `0 4px 14px ${safeAlpha(SECTIONS_CONFIG[2].color, 0.4)}`,
+                    boxShadow: `0 4px 14px ${safeAlpha(
+                      SECTIONS_CONFIG[1].color,
+                      0.4
+                    )}`,
                   }}
                 >
                   {isSmall ? "Ajouter" : "Ajouter une carte"}
@@ -1748,12 +1359,11 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                   <Grid item xs={12} sm={6} key={index}>
                     <ItemCard
                       onDelete={() => handleRemoveCard(index)}
-                      color={card.color || SECTIONS_CONFIG[2].color}
+                      color={card.color || SECTIONS_CONFIG[1].color}
                       index={index}
                     >
                       <Stack spacing={{ xs: 1.5, sm: 2 }}>
                         <StyledTextField
-                          isSmall={isSmall}
                           fullWidth
                           label="Titre"
                           value={card.title}
@@ -1762,7 +1372,6 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                           }
                         />
                         <StyledTextField
-                          isSmall={isSmall}
                           fullWidth
                           multiline
                           rows={isSmall ? 2 : 3}
@@ -1772,7 +1381,7 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                             handleCardChange(
                               index,
                               "description",
-                              e.target.value,
+                              e.target.value
                             )
                           }
                         />
@@ -1800,7 +1409,7 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
               borderBottom: "1px solid #e2e8f0",
               "&::before": { display: "none" },
               "&.Mui-expanded": {
-                bgcolor: safeAlpha(SECTIONS_CONFIG[3].color, 0.02),
+                bgcolor: safeAlpha(SECTIONS_CONFIG[2].color, 0.02),
               },
             }}
           >
@@ -1810,7 +1419,7 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                   sx={{
                     color:
                       expanded === "panel3"
-                        ? SECTIONS_CONFIG[3].color
+                        ? SECTIONS_CONFIG[2].color
                         : "inherit",
                     fontSize: { xs: 20, sm: 24 },
                   }}
@@ -1819,7 +1428,7 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
               sx={{ px: { xs: 2, sm: 3 }, py: 1 }}
             >
               <AccordionHeader
-                config={SECTIONS_CONFIG[3]}
+                config={SECTIONS_CONFIG[2]}
                 isExpanded={expanded === "panel3"}
                 isSmall={isSmall}
               />
@@ -1833,14 +1442,19 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                   p: { xs: 1.5, sm: 2.5 },
                   mb: { xs: 2, sm: 3 },
                   borderRadius: { xs: 2, sm: 3 },
-                  background: `linear-gradient(135deg, ${safeAlpha(SECTIONS_CONFIG[3].color, 0.05)} 0%, ${safeAlpha(SECTIONS_CONFIG[3].color, 0.02)} 100%)`,
-                  border: `1px solid ${safeAlpha(SECTIONS_CONFIG[3].color, 0.15)}`,
+                  background: `linear-gradient(135deg, ${safeAlpha(
+                    SECTIONS_CONFIG[2].color,
+                    0.05
+                  )} 0%, ${safeAlpha(SECTIONS_CONFIG[2].color, 0.02)} 100%)`,
+                  border: `1px solid ${safeAlpha(
+                    SECTIONS_CONFIG[2].color,
+                    0.15
+                  )}`,
                 }}
               >
                 <Grid container spacing={{ xs: 1.5, sm: 2 }}>
                   <Grid item xs={12} sm={4}>
                     <StyledTextField
-                      isSmall={isSmall}
                       fullWidth
                       label="Sur-titre"
                       value={formData.values.subTitle}
@@ -1851,7 +1465,6 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                   </Grid>
                   <Grid item xs={12} sm={4}>
                     <StyledTextField
-                      isSmall={isSmall}
                       fullWidth
                       label="Titre de section"
                       value={formData.values.title}
@@ -1878,11 +1491,11 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                   label="Liste des valeurs"
                   size="small"
                   sx={{
-                    bgcolor: safeAlpha(SECTIONS_CONFIG[3].color, 0.1),
-                    color: SECTIONS_CONFIG[3].color,
+                    bgcolor: safeAlpha(SECTIONS_CONFIG[2].color, 0.1),
+                    color: SECTIONS_CONFIG[2].color,
                     fontWeight: 600,
                     fontSize: { xs: "0.65rem", sm: "0.75rem" },
-                    "& .MuiChip-icon": { color: SECTIONS_CONFIG[3].color },
+                    "& .MuiChip-icon": { color: SECTIONS_CONFIG[2].color },
                   }}
                 />
               </Divider>
@@ -1892,12 +1505,11 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                   <Grid item xs={12} sm={6} key={index}>
                     <ItemCard
                       onDelete={() => handleRemoveValueItem(index)}
-                      color={item.color || SECTIONS_CONFIG[3].color}
+                      color={item.color || SECTIONS_CONFIG[2].color}
                       index={index}
                     >
                       <Stack spacing={{ xs: 1.5, sm: 2 }}>
                         <StyledTextField
-                          isSmall={isSmall}
                           fullWidth
                           label="Nom de la valeur"
                           value={item.title}
@@ -1905,12 +1517,11 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                             handleValueItemChange(
                               index,
                               "title",
-                              e.target.value,
+                              e.target.value
                             )
                           }
                         />
                         <StyledTextField
-                          isSmall={isSmall}
                           fullWidth
                           multiline
                           rows={2}
@@ -1920,7 +1531,7 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                             handleValueItemChange(
                               index,
                               "description",
-                              e.target.value,
+                              e.target.value
                             )
                           }
                         />
@@ -1943,8 +1554,8 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                       p: { xs: 3, sm: 4 },
                       borderRadius: { xs: 2, sm: 3 },
                       border: "2px dashed",
-                      borderColor: safeAlpha(SECTIONS_CONFIG[3].color, 0.3),
-                      bgcolor: safeAlpha(SECTIONS_CONFIG[3].color, 0.02),
+                      borderColor: safeAlpha(SECTIONS_CONFIG[2].color, 0.3),
+                      bgcolor: safeAlpha(SECTIONS_CONFIG[2].color, 0.02),
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -1952,8 +1563,8 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                       transition: "all 0.2s ease",
                       minHeight: { xs: 120, sm: 150 },
                       "&:hover": {
-                        borderColor: SECTIONS_CONFIG[3].color,
-                        bgcolor: safeAlpha(SECTIONS_CONFIG[3].color, 0.05),
+                        borderColor: SECTIONS_CONFIG[2].color,
+                        bgcolor: safeAlpha(SECTIONS_CONFIG[2].color, 0.05),
                         transform: { xs: "none", sm: "scale(1.02)" },
                       },
                     }}
@@ -1962,12 +1573,12 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                       <AddCircleOutlineIcon
                         sx={{
                           fontSize: { xs: 32, sm: 40 },
-                          color: SECTIONS_CONFIG[3].color,
+                          color: SECTIONS_CONFIG[2].color,
                           opacity: 0.7,
                         }}
                       />
                       <Typography
-                        color={SECTIONS_CONFIG[3].color}
+                        color={SECTIONS_CONFIG[2].color}
                         fontWeight={600}
                         sx={{ fontSize: { xs: "0.8rem", sm: "0.875rem" } }}
                       >
@@ -1989,7 +1600,7 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
               borderBottom: "1px solid #e2e8f0",
               "&::before": { display: "none" },
               "&.Mui-expanded": {
-                bgcolor: safeAlpha(SECTIONS_CONFIG[4].color, 0.02),
+                bgcolor: safeAlpha(SECTIONS_CONFIG[3].color, 0.02),
               },
             }}
           >
@@ -1999,7 +1610,7 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                   sx={{
                     color:
                       expanded === "panel4"
-                        ? SECTIONS_CONFIG[4].color
+                        ? SECTIONS_CONFIG[3].color
                         : "inherit",
                     fontSize: { xs: 20, sm: 24 },
                   }}
@@ -2008,7 +1619,7 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
               sx={{ px: { xs: 2, sm: 3 }, py: 1 }}
             >
               <AccordionHeader
-                config={SECTIONS_CONFIG[4]}
+                config={SECTIONS_CONFIG[3]}
                 isExpanded={expanded === "panel4"}
                 isSmall={isSmall}
               />
@@ -2020,7 +1631,6 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                 <Grid container spacing={{ xs: 1.5, sm: 2.5 }}>
                   <Grid item xs={12} sm={4}>
                     <StyledTextField
-                      isSmall={isSmall}
                       fullWidth
                       label="Sur-titre"
                       value={formData.approach.subTitle}
@@ -2028,14 +1638,13 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                         handleSimpleSectionChange(
                           "approach",
                           "subTitle",
-                          e.target.value,
+                          e.target.value
                         )
                       }
                     />
                   </Grid>
                   <Grid item xs={12} sm={5}>
                     <StyledTextField
-                      isSmall={isSmall}
                       fullWidth
                       label="Titre Principal"
                       value={formData.approach.title}
@@ -2043,7 +1652,7 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                         handleSimpleSectionChange(
                           "approach",
                           "title",
-                          e.target.value,
+                          e.target.value
                         )
                       }
                     />
@@ -2059,7 +1668,6 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                   </Grid>
                 </Grid>
                 <StyledTextField
-                  isSmall={isSmall}
                   fullWidth
                   multiline
                   rows={isSmall ? 4 : 5}
@@ -2069,7 +1677,7 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                     handleSimpleSectionChange(
                       "approach",
                       "description",
-                      e.target.value,
+                      e.target.value
                     )
                   }
                   placeholder="Décrivez votre approche unique..."
@@ -2086,7 +1694,7 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
             sx={{
               "&::before": { display: "none" },
               "&.Mui-expanded": {
-                bgcolor: safeAlpha(SECTIONS_CONFIG[5].color, 0.02),
+                bgcolor: safeAlpha(SECTIONS_CONFIG[4].color, 0.02),
               },
             }}
           >
@@ -2096,7 +1704,7 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                   sx={{
                     color:
                       expanded === "panel5"
-                        ? SECTIONS_CONFIG[5].color
+                        ? SECTIONS_CONFIG[4].color
                         : "inherit",
                     fontSize: { xs: 20, sm: 24 },
                   }}
@@ -2105,7 +1713,7 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
               sx={{ px: { xs: 2, sm: 3 }, py: 1 }}
             >
               <AccordionHeader
-                config={SECTIONS_CONFIG[5]}
+                config={SECTIONS_CONFIG[4]}
                 isExpanded={expanded === "panel5"}
                 isSmall={isSmall}
               />
@@ -2119,14 +1727,19 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                   p: { xs: 1.5, sm: 2.5 },
                   mb: { xs: 2, sm: 3 },
                   borderRadius: { xs: 2, sm: 3 },
-                  background: `linear-gradient(135deg, ${safeAlpha(SECTIONS_CONFIG[5].color, 0.05)} 0%, ${safeAlpha(SECTIONS_CONFIG[5].color, 0.02)} 100%)`,
-                  border: `1px solid ${safeAlpha(SECTIONS_CONFIG[5].color, 0.15)}`,
+                  background: `linear-gradient(135deg, ${safeAlpha(
+                    SECTIONS_CONFIG[4].color,
+                    0.05
+                  )} 0%, ${safeAlpha(SECTIONS_CONFIG[4].color, 0.02)} 100%)`,
+                  border: `1px solid ${safeAlpha(
+                    SECTIONS_CONFIG[4].color,
+                    0.15
+                  )}`,
                 }}
               >
                 <Grid container spacing={{ xs: 1.5, sm: 2 }}>
                   <Grid item xs={12} sm={4}>
                     <StyledTextField
-                      isSmall={isSmall}
                       fullWidth
                       label="Titre d'appel"
                       value={formData.cta.title}
@@ -2134,14 +1747,13 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                         handleSimpleSectionChange(
                           "cta",
                           "title",
-                          e.target.value,
+                          e.target.value
                         )
                       }
                     />
                   </Grid>
                   <Grid item xs={12} sm={4}>
                     <StyledTextField
-                      isSmall={isSmall}
                       fullWidth
                       label="Sous-titre"
                       value={formData.cta.subTitle}
@@ -2149,7 +1761,7 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                         handleSimpleSectionChange(
                           "cta",
                           "subTitle",
-                          e.target.value,
+                          e.target.value
                         )
                       }
                     />
@@ -2172,11 +1784,11 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                   label="Boutons d'action"
                   size="small"
                   sx={{
-                    bgcolor: safeAlpha(SECTIONS_CONFIG[5].color, 0.1),
-                    color: SECTIONS_CONFIG[5].color,
+                    bgcolor: safeAlpha(SECTIONS_CONFIG[4].color, 0.1),
+                    color: SECTIONS_CONFIG[4].color,
                     fontWeight: 600,
                     fontSize: { xs: "0.65rem", sm: "0.75rem" },
-                    "& .MuiChip-icon": { color: SECTIONS_CONFIG[5].color },
+                    "& .MuiChip-icon": { color: SECTIONS_CONFIG[4].color },
                   }}
                 />
               </Divider>
@@ -2199,7 +1811,10 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                         bgcolor: safeAlpha(safeBgColor, 0.02),
                         transition: "all 0.2s ease",
                         "&:hover": {
-                          boxShadow: `0 4px 20px ${safeAlpha(safeBgColor, 0.15)}`,
+                          boxShadow: `0 4px 20px ${safeAlpha(
+                            safeBgColor,
+                            0.15
+                          )}`,
                         },
                       }}
                     >
@@ -2242,7 +1857,6 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                         </Grid>
                         <Grid item xs={12} sm={6} md={3}>
                           <StyledTextField
-                            isSmall={isSmall}
                             fullWidth
                             label="Texte du bouton"
                             value={btn.label}
@@ -2250,14 +1864,13 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                               handleCtaButtonChange(
                                 index,
                                 "label",
-                                e.target.value,
+                                e.target.value
                               )
                             }
                           />
                         </Grid>
                         <Grid item xs={12} sm={6} md={3}>
                           <StyledTextField
-                            isSmall={isSmall}
                             fullWidth
                             label="URL / Lien"
                             value={btn.href}
@@ -2265,7 +1878,7 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                               handleCtaButtonChange(
                                 index,
                                 "href",
-                                e.target.value,
+                                e.target.value
                               )
                             }
                             InputProps={{
@@ -2315,7 +1928,9 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                             <Typography
                               variant="caption"
                               color="text.secondary"
-                              sx={{ fontSize: { xs: "0.7rem", sm: "0.75rem" } }}
+                              sx={{
+                                fontSize: { xs: "0.7rem", sm: "0.75rem" },
+                              }}
                             >
                               Aperçu :
                             </Typography>
@@ -2359,11 +1974,11 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
                     textTransform: "none",
                     fontWeight: 600,
                     fontSize: { xs: "0.8rem", sm: "0.875rem" },
-                    color: SECTIONS_CONFIG[5].color,
-                    borderColor: SECTIONS_CONFIG[5].color,
+                    color: SECTIONS_CONFIG[4].color,
+                    borderColor: SECTIONS_CONFIG[4].color,
                     "&:hover": {
-                      borderColor: SECTIONS_CONFIG[5].color,
-                      bgcolor: safeAlpha(SECTIONS_CONFIG[5].color, 0.05),
+                      borderColor: SECTIONS_CONFIG[4].color,
+                      bgcolor: safeAlpha(SECTIONS_CONFIG[4].color, 0.05),
                     },
                   }}
                 >
@@ -2407,12 +2022,10 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
             variant="contained"
             fullWidth={isSmall}
             size={isSmall ? "small" : "medium"}
-            disabled={saving || (!hasChanges && !pendingHeroImage)}
+            disabled={saving || !hasChanges}
             startIcon={
               saving ? (
                 <CircularProgress size={16} sx={{ color: "white" }} />
-              ) : pendingHeroImage ? (
-                <CloudUploadIcon />
               ) : (
                 <CheckCircleIcon />
               )
@@ -2423,25 +2036,16 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
               fontWeight: 600,
               px: { xs: 2, sm: 4 },
               order: { xs: 1, sm: 2 },
-              background:
-                hasChanges || pendingHeroImage
-                  ? pendingHeroImage
-                    ? "linear-gradient(135deg, #ed6c02 0%, #ff9800 100%)"
-                    : "linear-gradient(135deg, #818660 0%, rgb(168, 171, 149) 50%, #989e7a 100%)"
-                  : "#9ca3af",
-              boxShadow:
-                hasChanges || pendingHeroImage
-                  ? pendingHeroImage
-                    ? "0 4px 14px rgba(237, 108, 2, 0.4)"
-                    : "0 4px 14px rgba(99, 102, 241, 0.4)"
-                  : "none",
+              background: hasChanges
+                ? "linear-gradient(135deg, #818660 0%, rgb(168, 171, 149) 50%, #989e7a 100%)"
+                : "#9ca3af",
+              boxShadow: hasChanges
+                ? "0 4px 14px rgba(99, 102, 241, 0.4)"
+                : "none",
               "&:hover": {
-                boxShadow:
-                  hasChanges || pendingHeroImage
-                    ? pendingHeroImage
-                      ? "0 6px 20px rgba(237, 108, 2, 0.5)"
-                      : "0 6px 20px rgba(99, 102, 241, 0.5)"
-                    : "none",
+                boxShadow: hasChanges
+                  ? "0 6px 20px rgba(99, 102, 241, 0.5)"
+                  : "none",
               },
               "&:disabled": {
                 background: "#d1d5db",
@@ -2449,13 +2053,7 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
               },
             }}
           >
-            {saving
-              ? uploading
-                ? "Upload en cours..."
-                : "Sauvegarde..."
-              : pendingHeroImage
-                ? "Enregistrer (1 image à uploader)"
-                : "Sauvegarder"}
+            {saving ? "Sauvegarde..." : "Sauvegarder"}
           </Button>
         </DialogActions>
       </Dialog>
@@ -2485,7 +2083,9 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
   );
 };
 
-// --- Demo Component ---
+// =============================================================================
+// COMPOSANT DEMO
+// =============================================================================
 const ShowEditAbout: React.FC = () => {
   const [open, setOpen] = useState(false);
   const theme = useTheme();
