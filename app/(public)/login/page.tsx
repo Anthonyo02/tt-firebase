@@ -78,12 +78,21 @@ export default function LoginPage() {
       <Card sx={{ maxWidth: 420, width: "100%" }}>
         <CardContent sx={{ p: 4 }}>
           {/* Logo */}
-          <Box textAlign="center" mb={4}>
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              mb: 4,
+            }}
+          >
             <Image src={logo} alt="logo" width={90} height={90} priority />
+
             <Typography variant="h4" fontWeight={700} mt={2}>
               T~T Stock
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+
+            <Typography variant="body2" color="text.secondary" align="center">
               Connectez-vous pour gérer vos projets
             </Typography>
           </Box>
