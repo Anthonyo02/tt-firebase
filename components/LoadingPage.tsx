@@ -2,7 +2,7 @@
 
 import { Box, LinearProgress } from "@mui/material";
 import Image from "next/image";
-import logo from "@/public/images/logo.png";
+import logo from "../app/favicon.ico";
 
 const LoadingPage = () => (
   <Box

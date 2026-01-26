@@ -118,18 +118,28 @@ const COMPRESSION_OPTIONS = {
 };
 
 // --- Fonction helper pour convertir overlayColor en CSS ---
-const getOverlayGradient = (overlayColor: string): string => {
+// Fonction améliorée avec opacité configurable
+const getOverlayGradient = (overlayColor: string, opacity: number = 0.85): string => {
   const colorMap: Record<string, string> = {
-    "from-primary/80": "rgba(25, 118, 210, 0.8)",
-    "from-secondary/80": "rgba(156, 39, 176, 0.8)",
-    "from-blue-900/80": "rgba(13, 71, 161, 0.8)",
-    "from-green-900/80": "rgba(27, 94, 32, 0.8)",
-    "from-purple-900/80": "rgba(74, 20, 140, 0.8)",
-    "from-black/70": "rgba(0, 0, 0, 0.7)",
+    "from-primary/80": `rgba(25, 118, 210, ${opacity})`,
+    "from-secondary/80": `rgba(156, 39, 176, ${opacity})`,
+    "from-blue-900/80": `rgba(13, 71, 161, ${opacity})`,
+    "from-green-900/80": `rgba(27, 94, 32, ${opacity})`,
+    "from-purple-900/80": `rgba(74, 20, 140, ${opacity})`,
+    "from-black/70": `rgba(0, 0, 0, ${opacity})`,
   };
-  return colorMap[overlayColor] || overlayColor || "rgba(0, 0, 0, 0.7)";
+  
+  // Si c'est une couleur hex, la convertir en rgba
+  if (overlayColor.startsWith('#')) {
+    const hex = overlayColor.replace('#', '');
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+  }
+  
+  return colorMap[overlayColor] || `rgba(0, 0, 0, ${opacity})`;
 };
-
 export default function SiteWeb() {
   const [slides, setSlides] = useState<SlideData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -569,7 +579,7 @@ export default function SiteWeb() {
                         sx={{
                           position: "absolute",
                           inset: 0,
-                          background: `linear-gradient(to right, ${getOverlayGradient(selectedSlide.overlayColor)} 0%, transparent 100%)`,
+                          background: `linear-gradient(to right, ${getOverlayGradient(selectedSlide.overlayColor)} 0%, transparent 50%)`,
                         }}
                       />
                     </Box>

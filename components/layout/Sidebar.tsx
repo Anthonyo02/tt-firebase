@@ -57,7 +57,7 @@ const SidebarContent: React.FC<SidebarContentProps> = ({ onNavigate, pathname })
     ...(isOffline
       ? [{ text: "Hors Ligne", icon: <WifiOff />, path: "/offline" }]
       : []),
-    ...(isAdmin
+    ...(isAdmin && !isOffline
       ? [{ text: "Site Web Tolotady", icon: <Web />, path: "/siteweb" }]
       : []),
   ];

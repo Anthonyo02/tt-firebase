@@ -65,6 +65,8 @@ import {
 // Import du composant preview
 import Realisation from "./preview/Realisation";
 import { Camera, Video } from "lucide-react";
+import EditServiceBannerModal from "../HeroImageEditor";
+import EditBannier from "../HeroImageEditor";
 
 // --- Types ---
 interface VideoItem {
@@ -266,7 +268,8 @@ export default function RealisationEditor() {
   );
 
   // ✅ Image temporaire dans le dialog photo (pas encore confirmée)
-  const [tempDialogImage, setTempDialogImage] = useState<TempDialogImage | null>(null);
+  const [tempDialogImage, setTempDialogImage] =
+    useState<TempDialogImage | null>(null);
 
   const [videoDialog, setVideoDialog] = useState<{
     open: boolean;
@@ -522,7 +525,10 @@ export default function RealisationEditor() {
       // ✅ ADD : Ajouter localement et mettre en attente
       setData({ ...data, videos: [...data.videos, videoDialog.data] });
       setPendingNewVideoIds((prev) => new Set([...prev, videoId]));
-      setToast({ msg: "Vidéo ajoutée - N'oubliez pas d'enregistrer", type: "info" });
+      setToast({
+        msg: "Vidéo ajoutée - N'oubliez pas d'enregistrer",
+        type: "info",
+      });
     } else {
       // ✅ EDIT : Envoyer directement à Firebase
       setUpdatingItem(videoId);
@@ -677,7 +683,10 @@ export default function RealisationEditor() {
         setPendingNewPhotoIds((prev) => new Set([...prev, photoId]));
       }
 
-      setToast({ msg: "Photo ajoutée - N'oubliez pas d'enregistrer", type: "info" });
+      setToast({
+        msg: "Photo ajoutée - N'oubliez pas d'enregistrer",
+        type: "info",
+      });
     } else {
       // ✅ EDIT : Envoyer directement à Firebase
       setUpdatingItem(photoId);
@@ -817,7 +826,9 @@ export default function RealisationEditor() {
         ...data,
         videos: data.videos.filter((v) => !pendingNewVideoIds.has(v.id)),
         photos: data.photos.filter(
-          (p) => !pendingNewPhotoIds.has(p.id) && !pendingImages.some((pi) => pi.itemId === p.id),
+          (p) =>
+            !pendingNewPhotoIds.has(p.id) &&
+            !pendingImages.some((pi) => pi.itemId === p.id),
         ),
       };
       setData(newData);
@@ -828,6 +839,7 @@ export default function RealisationEditor() {
 
     setToast({ msg: "Modifications annulées", type: "info" });
   };
+  const [open, setOpen] = useState(true);
 
   // ============================================
   // LOADING STATE
@@ -967,6 +979,11 @@ export default function RealisationEditor() {
         <Fade in timeout={500}>
           <Box sx={{ maxWidth: 1600, mx: "auto", p: { xs: 1, sm: 2, md: 4 } }}>
             {/* TOP BAR */}
+            <EditBannier
+              open={open}
+              onClose={() => setOpen(false)}
+              url="bannier_realisation"
+            />
             <Paper
               elevation={0}
               sx={{
@@ -1035,7 +1052,9 @@ export default function RealisationEditor() {
                     },
                   }}
                 >
-                  {isSmall ? `Vidéos (${data.videos.length})` : `Vidéos (${data.videos.length})`}
+                  {isSmall
+                    ? `Vidéos (${data.videos.length})`
+                    : `Vidéos (${data.videos.length})`}
                 </Button>
                 <Button
                   onClick={() => setEditorTab("photos")}
@@ -1078,7 +1097,9 @@ export default function RealisationEditor() {
                     },
                   }}
                 >
-                  {isSmall ? `Photos (${data.photos.length})` : `Photos (${data.photos.length})`}
+                  {isSmall
+                    ? `Photos (${data.photos.length})`
+                    : `Photos (${data.photos.length})`}
                 </Button>
               </Box>
 
@@ -1094,7 +1115,11 @@ export default function RealisationEditor() {
                 {hasChangesToSave && (
                   <Chip
                     icon={<PendingIcon sx={{ fontSize: { xs: 14, sm: 16 } }} />}
-                    label={isSmall ? `${totalPendingCount} en attente` : getPendingLabel()}
+                    label={
+                      isSmall
+                        ? `${totalPendingCount} en attente`
+                        : getPendingLabel()
+                    }
                     onDelete={handleCancelAllChanges}
                     size={isSmall ? "small" : "medium"}
                     sx={{
@@ -1197,7 +1222,11 @@ export default function RealisationEditor() {
                         variant="h6"
                         sx={{
                           fontWeight: 700,
-                          fontSize: { xs: "1.1rem", sm: "1.25rem", md: "1.5rem" },
+                          fontSize: {
+                            xs: "1.1rem",
+                            sm: "1.25rem",
+                            md: "1.5rem",
+                          },
                         }}
                       >
                         Vidéos
@@ -1226,7 +1255,9 @@ export default function RealisationEditor() {
                   </Box>
                   <Button
                     variant="contained"
-                    startIcon={<AddIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />}
+                    startIcon={
+                      <AddIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />
+                    }
                     onClick={handleAddVideo}
                     size={isSmall ? "small" : "medium"}
                     sx={{
@@ -1256,14 +1287,7 @@ export default function RealisationEditor() {
                     const isVideoPending = isPendingVideo(video.id);
 
                     return (
-                      <Grid
-                        item
-                        xs={6}
-                        sm={6}
-                        md={4}
-                        lg={3}
-                        key={video.id}
-                      >
+                      <Grid item xs={6} sm={6} md={4} lg={3} key={video.id}>
                         <Grow in timeout={300 + index * 100}>
                           <Card
                             sx={{
@@ -1277,7 +1301,10 @@ export default function RealisationEditor() {
                                 : `1px solid ${THEME.neutral[200]}`,
                               transition: "all 0.3s ease",
                               "&:hover": {
-                                transform: { xs: "none", md: "translateY(-8px)" },
+                                transform: {
+                                  xs: "none",
+                                  md: "translateY(-8px)",
+                                },
                                 boxShadow: {
                                   xs: "0 4px 12px rgba(0,0,0,0.1)",
                                   md: "0 20px 40px rgba(0,0,0,0.1)",
@@ -1425,7 +1452,11 @@ export default function RealisationEditor() {
                                   fontWeight: 700,
                                   color: THEME.neutral[800],
                                   mb: 0.5,
-                                  fontSize: { xs: "0.75rem", sm: "0.875rem", md: "1rem" },
+                                  fontSize: {
+                                    xs: "0.75rem",
+                                    sm: "0.875rem",
+                                    md: "1rem",
+                                  },
                                   lineHeight: 1.3,
                                 }}
                                 noWrap
@@ -1469,7 +1500,11 @@ export default function RealisationEditor() {
                                       ),
                                       color: getClientColor(video.client),
                                       fontWeight: 600,
-                                      fontSize: { xs: "0.55rem", sm: "0.65rem", md: "0.75rem" },
+                                      fontSize: {
+                                        xs: "0.55rem",
+                                        sm: "0.65rem",
+                                        md: "0.75rem",
+                                      },
                                       height: { xs: 18, sm: 22, md: 24 },
                                     }}
                                   />
@@ -1481,7 +1516,11 @@ export default function RealisationEditor() {
                                   sx={{
                                     borderColor: THEME.neutral[300],
                                     color: THEME.neutral[600],
-                                    fontSize: { xs: "0.55rem", sm: "0.65rem", md: "0.75rem" },
+                                    fontSize: {
+                                      xs: "0.55rem",
+                                      sm: "0.65rem",
+                                      md: "0.75rem",
+                                    },
                                     height: { xs: 18, sm: 22, md: 24 },
                                   }}
                                 />
@@ -1519,7 +1558,11 @@ export default function RealisationEditor() {
                                     sx={{ color: THEME.primary.main }}
                                   />
                                 ) : (
-                                  <EditIcon sx={{ fontSize: { xs: 14, sm: 16, md: 18 } }} />
+                                  <EditIcon
+                                    sx={{
+                                      fontSize: { xs: 14, sm: 16, md: 18 },
+                                    }}
+                                  />
                                 )}
                               </IconButton>
                               <IconButton
@@ -1540,7 +1583,11 @@ export default function RealisationEditor() {
                                     sx={{ color: "#EF4444" }}
                                   />
                                 ) : (
-                                  <DeleteIcon sx={{ fontSize: { xs: 14, sm: 16, md: 18 } }} />
+                                  <DeleteIcon
+                                    sx={{
+                                      fontSize: { xs: 14, sm: 16, md: 18 },
+                                    }}
+                                  />
                                 )}
                               </IconButton>
                             </Stack>
@@ -1647,7 +1694,11 @@ export default function RealisationEditor() {
                         variant="h6"
                         sx={{
                           fontWeight: 700,
-                          fontSize: { xs: "1.1rem", sm: "1.25rem", md: "1.5rem" },
+                          fontSize: {
+                            xs: "1.1rem",
+                            sm: "1.25rem",
+                            md: "1.5rem",
+                          },
                         }}
                       >
                         Photos
@@ -1676,7 +1727,9 @@ export default function RealisationEditor() {
                   </Box>
                   <Button
                     variant="contained"
-                    startIcon={<AddIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />}
+                    startIcon={
+                      <AddIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />
+                    }
                     onClick={handleAddPhoto}
                     size={isSmall ? "small" : "medium"}
                     sx={{
@@ -1718,7 +1771,10 @@ export default function RealisationEditor() {
                                 : `1px solid ${THEME.neutral[200]}`,
                               transition: "all 0.3s ease",
                               "&:hover": {
-                                transform: { xs: "none", md: "translateY(-8px)" },
+                                transform: {
+                                  xs: "none",
+                                  md: "translateY(-8px)",
+                                },
                                 boxShadow: {
                                   xs: "0 4px 12px rgba(0,0,0,0.1)",
                                   md: "0 20px 40px rgba(0,0,0,0.1)",
@@ -1810,7 +1866,11 @@ export default function RealisationEditor() {
                                   fontWeight: 700,
                                   color: THEME.neutral[800],
                                   mb: 0.5,
-                                  fontSize: { xs: "0.75rem", sm: "0.875rem", md: "1rem" },
+                                  fontSize: {
+                                    xs: "0.75rem",
+                                    sm: "0.875rem",
+                                    md: "1rem",
+                                  },
                                   lineHeight: 1.3,
                                 }}
                                 noWrap
@@ -1854,7 +1914,11 @@ export default function RealisationEditor() {
                                       ),
                                       color: getClientColor(photo.client),
                                       fontWeight: 600,
-                                      fontSize: { xs: "0.55rem", sm: "0.65rem", md: "0.75rem" },
+                                      fontSize: {
+                                        xs: "0.55rem",
+                                        sm: "0.65rem",
+                                        md: "0.75rem",
+                                      },
                                       height: { xs: 18, sm: 22, md: 24 },
                                     }}
                                   />
@@ -1866,7 +1930,11 @@ export default function RealisationEditor() {
                                   sx={{
                                     borderColor: THEME.neutral[300],
                                     color: THEME.neutral[600],
-                                    fontSize: { xs: "0.55rem", sm: "0.65rem", md: "0.75rem" },
+                                    fontSize: {
+                                      xs: "0.55rem",
+                                      sm: "0.65rem",
+                                      md: "0.75rem",
+                                    },
                                     height: { xs: 18, sm: 22, md: 24 },
                                   }}
                                 />
@@ -1904,7 +1972,11 @@ export default function RealisationEditor() {
                                     sx={{ color: THEME.secondary.main }}
                                   />
                                 ) : (
-                                  <EditIcon sx={{ fontSize: { xs: 14, sm: 16, md: 18 } }} />
+                                  <EditIcon
+                                    sx={{
+                                      fontSize: { xs: 14, sm: 16, md: 18 },
+                                    }}
+                                  />
                                 )}
                               </IconButton>
                               <IconButton
@@ -1925,7 +1997,11 @@ export default function RealisationEditor() {
                                     sx={{ color: "#EF4444" }}
                                   />
                                 ) : (
-                                  <DeleteIcon sx={{ fontSize: { xs: 14, sm: 16, md: 18 } }} />
+                                  <DeleteIcon
+                                    sx={{
+                                      fontSize: { xs: 14, sm: 16, md: 18 },
+                                    }}
+                                  />
                                 )}
                               </IconButton>
                             </Stack>
@@ -2108,7 +2184,9 @@ export default function RealisationEditor() {
                         justifyContent: "center",
                       }}
                     >
-                      <PlayIcon sx={{ fontSize: { xs: 24, sm: 32 }, color: "white" }} />
+                      <PlayIcon
+                        sx={{ fontSize: { xs: 24, sm: 32 }, color: "white" }}
+                      />
                     </Box>
                   </Box>
                 </Box>
@@ -2207,7 +2285,9 @@ export default function RealisationEditor() {
                               bgcolor: client.color,
                             }}
                           />
-                          <span style={{ fontSize: isSmall ? "0.875rem" : "1rem" }}>
+                          <span
+                            style={{ fontSize: isSmall ? "0.875rem" : "1rem" }}
+                          >
                             {client.label}
                           </span>
                         </Stack>
@@ -2418,7 +2498,9 @@ export default function RealisationEditor() {
                         color={THEME.neutral[500]}
                         sx={{ fontSize: { xs: "0.75rem", sm: "0.875rem" } }}
                       >
-                        {isSmall ? "Cliquez pour ajouter" : "Glissez une image ici"}
+                        {isSmall
+                          ? "Cliquez pour ajouter"
+                          : "Glissez une image ici"}
                       </Typography>
                     </Stack>
                   )}
@@ -2464,7 +2546,8 @@ export default function RealisationEditor() {
                       textAlign: "center",
                     }}
                   >
-                    ⚠️ L'image sera ajoutée seulement après avoir cliqué sur "Ajouter"
+                    ⚠️ L'image sera ajoutée seulement après avoir cliqué sur
+                    "Ajouter"
                   </Typography>
                 )}
               </Grid>
@@ -2539,7 +2622,11 @@ export default function RealisationEditor() {
                                   bgcolor: client.color,
                                 }}
                               />
-                              <span style={{ fontSize: isSmall ? "0.875rem" : "1rem" }}>
+                              <span
+                                style={{
+                                  fontSize: isSmall ? "0.875rem" : "1rem",
+                                }}
+                              >
                                 {client.label}
                               </span>
                             </Stack>
@@ -2608,7 +2695,9 @@ export default function RealisationEditor() {
             variant="contained"
             onClick={handleSavePhotoDialog}
             fullWidth={isSmall}
-            disabled={!photoDialog.data?.title || updatingItem === photoDialog.data?.id}
+            disabled={
+              !photoDialog.data?.title || updatingItem === photoDialog.data?.id
+            }
             sx={{
               background: THEME.secondary.gradient,
               textTransform: "none",
