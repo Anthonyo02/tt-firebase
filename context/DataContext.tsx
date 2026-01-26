@@ -7,8 +7,6 @@ import React, {
   useEffect,
   useCallback,
 } from "react";
-
-// ✅ Import Firebase
 import { db } from "../lib/firebase";
 import {
   collection,
@@ -18,12 +16,10 @@ import {
   deleteDoc,
   doc,
 } from "firebase/firestore";
-
-// ✅ Import LocalForage
 import storage from "../lib/localforage";
 
 // =======================
-// INTERFACES (Inchangées)
+// INTERFACES
 // =======================
 
 export interface User {
@@ -69,56 +65,66 @@ export interface OfflineItem {
   timestamp: number;
 }
 
+// =======================
+// CONTEXT
+// =======================
+
 interface DataContextType {
   projets: Projet[];
   materiels: Materiel[];
   offlineQueue: OfflineItem[];
+  users: User[];
+  references: string[];
+  categorie: string[];
+  teamMembers: string[];
   isLoading: boolean;
-  setIsLoad: (isLoading: boolean) => void;
   isOnline: boolean;
+  setIsLoad: (isLoading: boolean) => void;
   fetchProjets: () => Promise<void>;
   fetchMateriels: () => Promise<void>;
+  fetchUsers: () => Promise<void>;
   addProjet: (projet: Omit<Projet, "id">) => Promise<void>;
   updateProjet: (id: string, projet: Partial<Projet>) => Promise<void>;
   deleteProjet: (id: string) => Promise<void>;
   addMateriel: (materiel: Omit<Materiel, "id">) => Promise<void>;
   updateMateriel: (id: string, materiel: Partial<Materiel>) => Promise<void>;
   deleteMateriel: (id: string, imagePublicId?: string) => Promise<void>;
-  syncOfflineData: () => Promise<void>;
-  references: string[];
-  categorie: string[];
-  teamMembers: string[];
-  addTeamMember: (name: string) => void;
-  addReference: (ref: string) => void;
-  users: User[];
-  fetchUsers: () => Promise<void>;
   addUser: (user: Omit<User, "id">) => Promise<void>;
   updateUser: (id: string, user: Partial<User>) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
+  addTeamMember: (name: string) => void;
+  addReference: (ref: string) => void;
+  syncOfflineData: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
+
+// =======================
+// PROVIDER
+// =======================
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [projets, setProjets] = useState<Projet[]>([]);
   const [materiels, setMateriels] = useState<Materiel[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [offlineQueue, setOfflineQueue] = useState<OfflineItem[]>([]);
-  const [isLoad, setIsLoad] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isOnline, setIsOnline] = useState(true);
-
   const [references, setReferences] = useState<string[]>([]);
   const [categorie, setCategorie] = useState<string[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-
   const [teamMembers, setTeamMembers] = useState<string[]>([
-    "Miary", "Oly", "Aina", "Thony", "Dio",
+    "Miary",
+    "Oly",
+    "Aina",
+    "Thony",
+    "Dio",
   ]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isOnline, setIsOnline] = useState(true);
+  const [isLoad, setIsLoad] = useState(false);
 
   // =======================
-  // UTILS STORAGE
+  // STORAGE UTILS
   // =======================
   const saveToStorage = useCallback(async (key: string, data: any) => {
     try {
@@ -129,9 +135,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   // =======================
-  // INITIALISATION
+  // OFFLINE DETECTION
   // =======================
-
   useEffect(() => {
     if (typeof navigator !== "undefined") {
       setIsOnline(navigator.onLine);
@@ -146,10 +151,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, []);
 
+  // =======================
+  // LOAD LOCAL DATA
+  // =======================
   const handleLoad = useCallback(async () => {
     setIsLoading(true);
     try {
-      // 1. Charger depuis LocalForage
       const [
         storedProjets,
         storedMateriels,
@@ -175,18 +182,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
       if (storedCat) setCategorie(storedCat);
       if (storedTeam) setTeamMembers(storedTeam);
       if (storedQueue) setOfflineQueue(storedQueue);
-
     } catch (error) {
       console.error("Erreur chargement localForage:", error);
     } finally {
       setIsLoading(false);
-      // 2. Fetch Firebase UNIQUEMENT si on est vraiment en ligne
       if (navigator.onLine) {
-        // On attend un peu pour être sûr que la connexion est stable
         setTimeout(() => {
-            fetchProjets();
-            fetchMateriels();
-            fetchUsers();
+          fetchProjets();
+          fetchMateriels();
+          fetchUsers();
         }, 1000);
       }
     }
@@ -204,26 +208,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   // =======================
-  // 🔥 USERS (FIRESTORE)
+  // FETCH FIRESTORE
   // =======================
+
   const fetchUsers = async () => {
-    // ⛔️ STOP si hors ligne pour ne pas écraser les données locales
-    if (!navigator.onLine) return; 
+    if (!navigator.onLine) return;
 
     try {
-      const querySnapshot = await getDocs(collection(db, "users"));
-      
-      // 🛡️ SÉCURITÉ : Si Firestore renvoie vide mais qu'on a des données locales, on n'écrase pas.
-      // Cela arrive si "navigator.onLine" est true mais que le backend est inaccessible.
-      if (querySnapshot.empty && users.length > 0) {
-        console.warn("Fetch Users vide alors que données locales existent. Annulation.");
-        return;
-      }
+      const snapshot = await getDocs(collection(db, "users"));
+      if (snapshot.empty && users.length > 0) return;
 
-      const formattedUsers: User[] = [];
-      querySnapshot.forEach((doc) => {
+      const formatted: User[] = [];
+      snapshot.forEach((doc) => {
         const data = doc.data();
-        formattedUsers.push({
+        formatted.push({
           id: doc.id,
           nom: data.nom || "",
           email: data.email || "",
@@ -231,84 +229,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
         });
       });
 
-      setUsers(formattedUsers);
-      await saveToStorage("users", formattedUsers);
-    } catch (error) {
-      console.error("Error fetching users:", error);
+      setUsers(formatted);
+      await saveToStorage("users", formatted);
+    } catch (err) {
+      console.error("fetchUsers error:", err);
     }
   };
 
-  const addUser = async (user: Omit<User, "id">) => {
-    const tempId = `temp_${Date.now()}`;
-    const newUser = { ...user, id: tempId };
-
-    setUsers((prev) => {
-      const updated = [...prev, newUser];
-      saveToStorage("users", updated);
-      return updated;
-    });
-
-    try {
-      await addDoc(collection(db, "users"), user);
-      if (navigator.onLine) await fetchUsers();
-    } catch (error) {
-      console.error("Erreur addUser:", error);
-    }
-  };
-
-  const updateUser = async (id: string, user: Partial<User>) => {
-    setUsers((prev) => {
-      const updated = prev.map((u) => (u.id === id ? { ...u, ...user } : u));
-      saveToStorage("users", updated);
-      return updated;
-    });
-
-    try {
-      const userRef = doc(db, "users", id);
-      await updateDoc(userRef, user);
-      
-      const storedUser = await storage.getItem<User>("user");
-      if (storedUser && storedUser.id === id) {
-          await storage.setItem("user", { ...storedUser, ...user });
-      }
-    } catch (error) {
-      console.error("Erreur updateUser:", error);
-    }
-  };
-
-  const deleteUser = async (id: string) => {
-    setUsers((prev) => {
-      const updated = prev.filter((u) => u.id !== id);
-      saveToStorage("users", updated);
-      return updated;
-    });
-
-    try {
-      await deleteDoc(doc(db, "users", id));
-    } catch (error) {
-      console.error("Erreur deleteUser:", error);
-    }
-  };
-
-  // =======================
-  // 🔥 PROJETS (FIRESTORE)
-  // =======================
   const fetchProjets = async () => {
-    if (!navigator.onLine) return; // ⛔️ STOP si hors ligne
+    if (!navigator.onLine) return;
 
     try {
-      const querySnapshot = await getDocs(collection(db, "projets"));
+      const snapshot = await getDocs(collection(db, "projets"));
+      if (snapshot.empty && projets.length > 0) return;
 
-      // 🛡️ SÉCURITÉ Anti-écrasement
-      if (querySnapshot.empty && projets.length > 0) {
-        console.warn("Fetch Projets vide alors que données locales existent. Annulation.");
-        return;
-      }
-
-      const formattedProjets: Projet[] = [];
-      querySnapshot.forEach((doc) => {
+      const formatted: Projet[] = [];
+      snapshot.forEach((doc) => {
         const p = doc.data();
-        formattedProjets.push({
+        formatted.push({
           id: doc.id,
           titre: p.titre || "",
           lieu: p.lieu || "",
@@ -324,87 +262,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
         });
       });
 
-      setProjets(formattedProjets);
-      await saveToStorage("projets", formattedProjets);
-    } catch (error) {
-      console.error("Error fetching projets:", error);
+      setProjets(formatted);
+      await saveToStorage("projets", formatted);
+    } catch (err) {
+      console.error("fetchProjets error:", err);
     }
   };
 
-  const addProjet = async (projet: Omit<Projet, "id">) => {
-    const tempId = `temp_${Date.now()}`;
-    const newProjet = { ...projet, id: tempId };
-
-    setProjets((prev) => {
-      const updated = [...prev, newProjet];
-      saveToStorage("projets", updated);
-      return updated;
-    });
-
-    try {
-      const cleanProjet = JSON.parse(JSON.stringify(projet));
-      await addDoc(collection(db, "projets"), cleanProjet);
-      if (navigator.onLine) fetchProjets();
-    } catch (error) {
-      console.error("Erreur addProjet (passage en offline queue):", error);
-      addToOfflineQueue({
-        id: tempId,
-        type: "projet",
-        action: "create",
-        data: projet,
-      });
-    }
-  };
-
-  const updateProjet = async (id: string, projet: Partial<Projet>) => {
-    setProjets((prev) => {
-      const updated = prev.map((p) => (p.id === id ? { ...p, ...projet } : p));
-      saveToStorage("projets", updated);
-      return updated;
-    });
-
-    try {
-      const projetRef = doc(db, "projets", id);
-      await updateDoc(projetRef, projet);
-    } catch (error) {
-      console.error("Erreur updateProjet", error);
-      addToOfflineQueue({ id, type: "projet", action: "update", data: projet });
-    }
-  };
-
-  const deleteProjet = async (id: string) => {
-    setProjets((prev) => {
-      const updated = prev.filter((p) => p.id !== id);
-      saveToStorage("projets", updated);
-      return updated;
-    });
-
-    try {
-      await deleteDoc(doc(db, "projets", id));
-    } catch (error) {
-      addToOfflineQueue({ id, type: "projet", action: "delete", data: null });
-    }
-  };
-
-  // =======================
-  // 🔥 MATÉRIELS (FIRESTORE)
-  // =======================
   const fetchMateriels = async () => {
-    if (!navigator.onLine) return; // ⛔️ STOP si hors ligne
+    if (!navigator.onLine) return;
 
     try {
-      const querySnapshot = await getDocs(collection(db, "materiels"));
+      const snapshot = await getDocs(collection(db, "materiels"));
+      if (snapshot.empty && materiels.length > 0) return;
 
-      // 🛡️ SÉCURITÉ Anti-écrasement
-      if (querySnapshot.empty && materiels.length > 0) {
-        console.warn("Fetch Materiels vide alors que données locales existent. Annulation.");
-        return;
-      }
-
-      const formattedMateriels: Materiel[] = [];
-      querySnapshot.forEach((doc) => {
+      const formatted: Materiel[] = [];
+      snapshot.forEach((doc) => {
         const m = doc.data();
-        formattedMateriels.push({
+        formatted.push({
           id: doc.id,
           nom: m.nom || "",
           quantites: Number(m.quantites || 0),
@@ -418,111 +293,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
         });
       });
 
-      setMateriels(formattedMateriels);
-      await saveToStorage("materiels", formattedMateriels);
+      setMateriels(formatted);
+      await saveToStorage("materiels", formatted);
 
-      const refs = [...new Set(formattedMateriels.map((m) => m.reference).filter(Boolean))];
+      const refs = [...new Set(formatted.map((m) => m.reference).filter(Boolean))];
       setReferences(refs);
       await saveToStorage("references", refs);
 
-      const cats = [...new Set(formattedMateriels.map((m) => m.comentaire).filter(Boolean))];
+      const cats = [...new Set(formatted.map((m) => m.comentaire).filter(Boolean))];
       setCategorie(cats);
       await saveToStorage("categorie", cats);
-
     } catch (err) {
       console.error("fetchMateriels error:", err);
     }
   };
 
-  const addMateriel = async (materiel: Omit<Materiel, "id">) => {
-    const newMaterielData = {
-      ...materiel,
-      quantites: Number(materiel.quantites),
-      imageUrl: materiel.imageUrl || "",
-      imagePublicId: materiel.imagePublicId || "",
-    };
-
-    const tempId = `temp_${Date.now()}`;
-
-    setMateriels((prev) => {
-      const updated = [...prev, { ...newMaterielData, id: tempId }];
-      saveToStorage("materiels", updated);
-      return updated;
-    });
-
-    try {
-      await addDoc(collection(db, "materiels"), newMaterielData);
-      if (navigator.onLine) await fetchMateriels();
-    } catch (error) {
-      console.error("Erreur addMateriel:", error);
-    }
-  };
-
-  const updateMateriel = async (
-    id: string,
-    materiel: Partial<Materiel> & { imageBase64?: string; mimeType?: string }
-  ) => {
-    let updates: any = { ...materiel };
-    if (updates.imageBase64) {
-      updates.imageUrl = updates.imageBase64;
-      delete updates.imageBase64;
-      delete updates.mimeType;
-    }
-    if (updates.quantites) {
-      updates.quantites = Number(updates.quantites);
-    }
-
-    setMateriels((prev) => {
-      const updated = prev.map((m) => (m.id === id ? { ...m, ...updates } : m));
-      saveToStorage("materiels", updated);
-      return updated;
-    });
-
-    try {
-      const matRef = doc(db, "materiels", id);
-      await updateDoc(matRef, updates);
-
-      if (materiel.reference && !references.includes(materiel.reference)) {
-        const updatedRefs = [...references, materiel.reference];
-        setReferences(updatedRefs);
-        await saveToStorage("references", updatedRefs);
-      }
-      if (materiel.comentaire && !categorie.includes(materiel.comentaire)) {
-        const updatedCat = [...categorie, materiel.comentaire];
-        setCategorie(updatedCat);
-        await saveToStorage("categorie", updatedCat);
-      }
-    } catch (error) {
-      console.error("Erreur updateMateriel:", error);
-      addToOfflineQueue({ id, type: "materiel", action: "update", data: updates });
-    }
-  };
-
-  const deleteMateriel = async (id: string, imagePublicId?: string) => {
-    setMateriels((prev) => {
-        const updated = prev.filter((m) => m.id !== id);
-        saveToStorage("materiels", updated);
-        return updated;
-    });
-
-    try {
-      await deleteDoc(doc(db, "materiels", id));
-      if (imagePublicId && navigator.onLine) {
-        fetch("/api/cloudinary/delete", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ public_id: imagePublicId }),
-        }).catch(console.error);
-      }
-    } catch (error) {
-      console.error("❌ deleteMateriel error:", error);
-    }
-  };
-
   // =======================
-  // UTILS & OFFLINE
+  // CRUD & OFFLINE QUEUE
   // =======================
-
   const addToOfflineQueue = async (item: Omit<OfflineItem, "timestamp">) => {
     const newItem = { ...item, timestamp: Date.now() };
     const newQueue = [...offlineQueue, newItem];
@@ -530,20 +318,118 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     await saveToStorage("offlineQueue", newQueue);
   };
 
-  const syncOfflineData = async () => {
-    if (offlineQueue.length > 0 && navigator.onLine) {
-      console.log("Syncing Firestore pending writes...");
-      // Ici vous devriez implémenter la logique de retry réelle
-      // Pour l'instant, on vide la queue après reconnexion
-      setOfflineQueue([]);
-      await saveToStorage("offlineQueue", []);
+  const addUser = async (user: Omit<User, "id">) => {
+    const tempId = `temp_${Date.now()}`;
+    const newUser = { ...user, id: tempId };
+    setUsers((prev) => [...prev, newUser]);
+    await saveToStorage("users", [...users, newUser]);
 
-      await fetchProjets();
-      await fetchMateriels();
-      await fetchUsers();
+    try {
+      await addDoc(collection(db, "users"), user);
+      if (navigator.onLine) await fetchUsers();
+    } catch {
+      await addToOfflineQueue({ id: tempId, type: "user", action: "create", data: user });
     }
   };
 
+  const updateUser = async (id: string, user: Partial<User>) => {
+    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, ...user } : u)));
+    await saveToStorage("users", users);
+
+    try {
+      const ref = doc(db, "users", id);
+      await updateDoc(ref, user);
+    } catch {
+      await addToOfflineQueue({ id, type: "user", action: "update", data: user });
+    }
+  };
+
+  const deleteUser = async (id: string) => {
+    setUsers((prev) => prev.filter((u) => u.id !== id));
+    await saveToStorage("users", users);
+
+    try {
+      await deleteDoc(doc(db, "users", id));
+    } catch {
+      await addToOfflineQueue({ id, type: "user", action: "delete", data: null });
+    }
+  };
+
+  const addProjet = async (projet: Omit<Projet, "id">) => {
+    const tempId = `temp_${Date.now()}`;
+    const newProjet = { ...projet, id: tempId };
+    setProjets((prev) => [...prev, newProjet]);
+    await saveToStorage("projets", [...projets, newProjet]);
+
+    try {
+      await addDoc(collection(db, "projets"), projet);
+      if (navigator.onLine) await fetchProjets();
+    } catch {
+      await addToOfflineQueue({ id: tempId, type: "projet", action: "create", data: projet });
+    }
+  };
+
+  const updateProjet = async (id: string, projet: Partial<Projet>) => {
+    setProjets((prev) => prev.map((p) => (p.id === id ? { ...p, ...projet } : p)));
+    await saveToStorage("projets", projets);
+
+    try {
+      await updateDoc(doc(db, "projets", id), projet);
+    } catch {
+      await addToOfflineQueue({ id, type: "projet", action: "update", data: projet });
+    }
+  };
+
+  const deleteProjet = async (id: string) => {
+    setProjets((prev) => prev.filter((p) => p.id !== id));
+    await saveToStorage("projets", projets);
+
+    try {
+      await deleteDoc(doc(db, "projets", id));
+    } catch {
+      await addToOfflineQueue({ id, type: "projet", action: "delete", data: null });
+    }
+  };
+
+  const addMateriel = async (materiel: Omit<Materiel, "id">) => {
+    const tempId = `temp_${Date.now()}`;
+    const newMateriel = { ...materiel, id: tempId, quantites: Number(materiel.quantites) };
+    setMateriels((prev) => [...prev, newMateriel]);
+    await saveToStorage("materiels", [...materiels, newMateriel]);
+
+    try {
+      await addDoc(collection(db, "materiels"), materiel);
+      if (navigator.onLine) await fetchMateriels();
+    } catch {
+      await addToOfflineQueue({ id: tempId, type: "materiel", action: "create", data: materiel });
+    }
+  };
+
+  const updateMateriel = async (id: string, materiel: Partial<Materiel>) => {
+    setMateriels((prev) => prev.map((m) => (m.id === id ? { ...m, ...materiel } : m)));
+    await saveToStorage("materiels", materiels);
+
+    try {
+      await updateDoc(doc(db, "materiels", id), materiel);
+    } catch {
+      await addToOfflineQueue({ id, type: "materiel", action: "update", data: materiel });
+    }
+  };
+
+  const deleteMateriel = async (id: string) => {
+    setMateriels((prev) => prev.filter((m) => m.id !== id));
+    await saveToStorage("materiels", materiels);
+
+    try {
+      await deleteDoc(doc(db, "materiels", id));
+    } catch {
+      await addToOfflineQueue({ id, type: "materiel", action: "delete", data: null });
+    }
+  };
+
+  // =======================
+  // TEAM & REFERENCE
+  // =======================
   const addTeamMember = (name: string) => {
     if (!teamMembers.includes(name)) {
       const updated = [...teamMembers, name];
@@ -560,34 +446,75 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  // =======================
+  // SYNC OFFLINE
+  // =======================
+  const syncOfflineData = async () => {
+    if (!navigator.onLine || offlineQueue.length === 0) return;
+
+    console.log("Syncing offline queue...");
+    for (const item of offlineQueue) {
+      try {
+        switch (item.type) {
+          case "user":
+            if (item.action === "create") await addDoc(collection(db, "users"), item.data);
+            else if (item.action === "update") await updateDoc(doc(db, "users", item.id), item.data);
+            else if (item.action === "delete") await deleteDoc(doc(db, "users", item.id));
+            break;
+          case "projet":
+            if (item.action === "create") await addDoc(collection(db, "projets"), item.data);
+            else if (item.action === "update") await updateDoc(doc(db, "projets", item.id), item.data);
+            else if (item.action === "delete") await deleteDoc(doc(db, "projets", item.id));
+            break;
+          case "materiel":
+            if (item.action === "create") await addDoc(collection(db, "materiels"), item.data);
+            else if (item.action === "update") await updateDoc(doc(db, "materiels", item.id), item.data);
+            else if (item.action === "delete") await deleteDoc(doc(db, "materiels", item.id));
+            break;
+        }
+      } catch (err) {
+        console.error("Sync offline item failed:", item, err);
+      }
+    }
+
+    setOfflineQueue([]);
+    await saveToStorage("offlineQueue", []);
+    await fetchProjets();
+    await fetchMateriels();
+    await fetchUsers();
+  };
+
+  // =======================
+  // PROVIDER RETURN
+  // =======================
   return (
     <DataContext.Provider
       value={{
         projets,
         materiels,
+        users,
         offlineQueue,
+        references,
+        categorie,
+        teamMembers,
         isLoading,
-        setIsLoad,
         isOnline,
+        setIsLoad,
         fetchProjets,
         fetchMateriels,
+        fetchUsers,
         addProjet,
         updateProjet,
         deleteProjet,
         addMateriel,
         updateMateriel,
         deleteMateriel,
-        syncOfflineData,
-        references,
-        categorie,
-        teamMembers,
-        addTeamMember,
-        addReference,
-        users,
-        fetchUsers,
         addUser,
         updateUser,
         deleteUser,
+        addTeamMember,
+        addReference,
+        syncOfflineData,
       }}
     >
       {children}

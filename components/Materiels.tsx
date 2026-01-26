@@ -164,7 +164,7 @@ const MaterielTableRow = memo(
             sx={{ borderRadius: 2, fontWeight: 600 }}
           />
         </TableCell>
-        <TableCell align="right">
+        <TableCell align={isAdmin ? "right" : "left"}>
           {isAdmin ? (
             <IconButton
               size="small"
@@ -186,13 +186,13 @@ const MaterielTableRow = memo(
                 whiteSpace: "nowrap",
               }}
             >
-              {materiel.description}
+              {materiel.description || "Description indisponible"}
             </Typography>
           )}
         </TableCell>
       </TableRow>
     </Grow>
-  )
+  ),
 );
 
 MaterielTableRow.displayName = "MaterielTableRow";
@@ -325,6 +325,7 @@ const MaterielCard = memo(
                   >
                     <MoreVert fontSize="small" />
                   </IconButton>
+                
                 )}
               </Box>
             </Box>
@@ -332,7 +333,7 @@ const MaterielCard = memo(
         </Card>
       </Grow>
     </Grid>
-  )
+  ),
 );
 
 MaterielCard.displayName = "MaterielCard";
@@ -377,7 +378,9 @@ const Materiels: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   // ✅ Chargement asynchrone des catégories avec LocalForage
-  const [categoriesFromStorage, setCategoriesFromStorage] = useState<string[]>([]);
+  const [categoriesFromStorage, setCategoriesFromStorage] = useState<string[]>(
+    [],
+  );
 
   useEffect(() => {
     const loadCategories = async () => {
@@ -467,7 +470,7 @@ const Materiels: React.FC = () => {
           return theme.palette.primary.main;
       }
     },
-    [theme]
+    [theme],
   );
 
   // ✅ Handlers memoïsés
@@ -476,14 +479,14 @@ const Materiels: React.FC = () => {
       e.stopPropagation();
       setMenuAnchor({ el: e.currentTarget, materiel });
     },
-    []
+    [],
   );
 
   const handleMenuClose = useCallback(() => setMenuAnchor(null), []);
 
   const handleView = useCallback(
     (materiel: Materiel) => setViewMateriel(materiel),
-    []
+    [],
   );
 
   const handleResetFilters = useCallback(() => {
@@ -535,7 +538,7 @@ const Materiels: React.FC = () => {
       getStatusIconBg,
       getMaterielImage,
       theme,
-    ]
+    ],
   );
 
   return (
@@ -544,7 +547,7 @@ const Materiels: React.FC = () => {
         minHeight: "100vh",
         background: `linear-gradient(135deg, ${alpha(
           theme.palette.primary.main,
-          0.03
+          0.03,
         )} 0%, ${alpha(theme.palette.secondary.main, 0.03)} 100%)`,
         p: { xs: 2, md: 4 },
       }}
@@ -815,7 +818,7 @@ const Materiels: React.FC = () => {
                   Qté
                 </TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Statut</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>
+                <TableCell align={isAdmin ? "right" : "inherit"} sx={{ fontWeight: 700}}>
                   {isAdmin ? "Actions" : "Description"}
                 </TableCell>
               </TableRow>
