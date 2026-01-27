@@ -345,7 +345,7 @@ export default function LogoPreview() {
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   useEffect(() => {
-    const docRef = doc(db, "website_content", "partenaire_section");
+    const docRef = doc(db, "website_content", "logo");
 
     const unsubscribe = onSnapshot(
       docRef,

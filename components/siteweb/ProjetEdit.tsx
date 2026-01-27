@@ -57,6 +57,7 @@ import EditBannier from "../HeroImageEditor";
 import LogoEditor from "./LogoEditor";
 import { Heart, Leaf, Target } from "lucide-react";
 import ProjetsPreview from "./preview/ProjetsPreview";
+import StyledTextField from "../about/StyledTextField";
 
 // ============================================
 // TYPES & INTERFACES
@@ -81,7 +82,7 @@ interface ListGroup {
 interface FeatureImage {
   imageId: string;
   imageUrl: string;
-  logo: string; // URL du logo sélectionné
+  logo: string;
   alt: string;
 }
 
@@ -107,7 +108,9 @@ interface FeatureBox {
   updatedAt: string;
 }
 
+// ✅ Interface modifiée avec introduction
 interface ProjetsData {
+  introduction: string;
   projets: FeatureBox[];
 }
 
@@ -116,11 +119,11 @@ interface FeatureLogo {
   name: string;
   image: string;
   imagePublicId?: string;
-  order: number;
 }
 
+// ✅ Interface modifiée: partenaires → logo
 interface LogoData {
-  partenaires: FeatureLogo[];
+  logos: FeatureLogo[];
 }
 
 interface PendingImage {
@@ -237,7 +240,9 @@ const createNewBox = (lastSide?: "left" | "right"): FeatureBox => ({
   updatedAt: getTimestamp(),
 });
 
+// ✅ DEFAULT modifié avec introduction
 const DEFAULT_PROJETS_DATA: ProjetsData = {
+  introduction: "",
   projets: [],
 };
 
@@ -252,7 +257,7 @@ export default function ProjetsEditor() {
 
   // États principaux
   const [data, setData] = useState<ProjetsData | null>(null);
-  const [logos, setLogos] = useState<FeatureLogo[]>([]); // État séparé pour les logos
+  const [logos, setLogos] = useState<FeatureLogo[]>([]);
   const [loading, setLoading] = useState(true);
   const [logosLoading, setLogosLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -267,11 +272,11 @@ export default function ProjetsEditor() {
 
   // Images en attente
   const [pendingImages, setPendingImages] = useState<Map<string, PendingImage>>(
-    new Map(),
+    new Map()
   );
 
   // ============================================
-  // FIREBASE SYNC - LOGOS
+  // FIREBASE SYNC - LOGOS (modifié: partenaires → logo)
   // ============================================
 
   useEffect(() => {
@@ -282,10 +287,8 @@ export default function ProjetsEditor() {
       (snapshot) => {
         if (snapshot.exists()) {
           const docData = snapshot.data() as LogoData;
-          // Trier les logos par order
-          const sortedLogos = (docData.partenaires || []).sort(
-            (a, b) => a.order - b.order,
-          );
+          // ✅ Changé: partenaires → logo
+          const sortedLogos = (docData.logos || [])
           setLogos(sortedLogos);
         } else {
           setLogos([]);
@@ -295,14 +298,14 @@ export default function ProjetsEditor() {
       (error) => {
         console.error("Erreur Firebase logos:", error);
         setLogosLoading(false);
-      },
+      }
     );
 
     return () => unsubscribe();
   }, []);
 
   // ============================================
-  // FIREBASE SYNC - PROJETS
+  // FIREBASE SYNC - PROJETS (modifié avec introduction)
   // ============================================
 
   useEffect(() => {
@@ -313,7 +316,11 @@ export default function ProjetsEditor() {
       (snapshot) => {
         if (snapshot.exists()) {
           const docData = snapshot.data() as ProjetsData;
-          setData({ projets: docData.projets || [] });
+          // ✅ Ajout de introduction
+          setData({
+            introduction: docData.introduction || "",
+            projets: docData.projets || [],
+          });
         } else {
           setDoc(docRef, DEFAULT_PROJETS_DATA);
           setData(DEFAULT_PROJETS_DATA);
@@ -324,7 +331,7 @@ export default function ProjetsEditor() {
         console.error("Erreur Firebase:", error);
         setToast({ msg: "Erreur de connexion", type: "error" });
         setLoading(false);
-      },
+      }
     );
 
     return () => unsubscribe();
@@ -346,6 +353,15 @@ export default function ProjetsEditor() {
   };
 
   // ============================================
+  // INTRODUCTION HANDLER
+  // ============================================
+
+  const updateIntroduction = (value: string) => {
+    if (!data) return;
+    setData({ ...data, introduction: value });
+  };
+
+  // ============================================
   // BOX HANDLERS
   // ============================================
 
@@ -353,7 +369,7 @@ export default function ProjetsEditor() {
     if (!data) return;
     const lastBox = data.projets[data.projets.length - 1];
     const newBox = createNewBox(lastBox?.imageSide);
-    setData({ projets: [...data.projets, newBox] });
+    setData({ ...data, projets: [...data.projets, newBox] });
     setExpandedSection(newBox.id);
   };
 
@@ -373,7 +389,7 @@ export default function ProjetsEditor() {
     const index = data.projets.findIndex((b) => b.id === boxId);
     const newprojets = [...data.projets];
     newprojets.splice(index + 1, 0, newBox);
-    setData({ projets: newprojets });
+    setData({ ...data, projets: newprojets });
     setExpandedSection(newBox.id);
   };
 
@@ -386,17 +402,18 @@ export default function ProjetsEditor() {
       newPending.delete(boxId);
       setPendingImages(newPending);
     }
-    setData({ projets: data.projets.filter((b) => b.id !== boxId) });
+    setData({ ...data, projets: data.projets.filter((b) => b.id !== boxId) });
     if (expandedSection === boxId) setExpandedSection(false);
   };
 
   const updateBox = (boxId: string, updates: Partial<FeatureBox>) => {
     if (!data) return;
     setData({
+      ...data,
       projets: data.projets.map((box) =>
         box.id === boxId
           ? { ...box, ...updates, updatedAt: getTimestamp() }
-          : box,
+          : box
       ),
     });
   };
@@ -433,7 +450,7 @@ export default function ProjetsEditor() {
     if (!box) return;
 
     const newLabels = box.labels.map((label) =>
-      label.id === labelId ? { ...label, text } : label,
+      label.id === labelId ? { ...label, text } : label
     );
 
     updateBox(boxId, { labels: newLabels });
@@ -470,14 +487,14 @@ export default function ProjetsEditor() {
   const updateListGroupTitle = (
     boxId: string,
     groupId: string,
-    title: string,
+    title: string
   ) => {
     if (!data) return;
     const box = data.projets.find((b) => b.id === boxId);
     if (!box) return;
 
     const newGroups = box.listGroups.map((group) =>
-      group.id === groupId ? { ...group, title } : group,
+      group.id === groupId ? { ...group, title } : group
     );
 
     updateBox(boxId, { listGroups: newGroups });
@@ -502,7 +519,7 @@ export default function ProjetsEditor() {
     const newGroups = box.listGroups.map((group) =>
       group.id === groupId
         ? { ...group, items: [...group.items, newItem] }
-        : group,
+        : group
     );
 
     updateBox(boxId, { listGroups: newGroups });
@@ -512,7 +529,7 @@ export default function ProjetsEditor() {
     boxId: string,
     groupId: string,
     itemId: string,
-    text: string,
+    text: string
   ) => {
     if (!data) return;
     const box = data.projets.find((b) => b.id === boxId);
@@ -523,10 +540,10 @@ export default function ProjetsEditor() {
         ? {
             ...group,
             items: group.items.map((item) =>
-              item.id === itemId ? { ...item, text } : item,
+              item.id === itemId ? { ...item, text } : item
             ),
           }
-        : group,
+        : group
     );
 
     updateBox(boxId, { listGroups: newGroups });
@@ -540,7 +557,7 @@ export default function ProjetsEditor() {
     const newGroups = box.listGroups.map((group) =>
       group.id === groupId
         ? { ...group, items: group.items.filter((item) => item.id !== itemId) }
-        : group,
+        : group
     );
 
     updateBox(boxId, { listGroups: newGroups });
@@ -587,7 +604,7 @@ export default function ProjetsEditor() {
   };
 
   // ============================================
-  // SAVE HANDLER
+  // SAVE HANDLER (modifié avec introduction)
   // ============================================
 
   const handleSave = async () => {
@@ -602,7 +619,7 @@ export default function ProjetsEditor() {
         try {
           const compressedFile = await imageCompression(
             pending.file,
-            COMPRESSION_OPTIONS,
+            COMPRESSION_OPTIONS
           );
 
           const formData = new FormData();
@@ -632,7 +649,7 @@ export default function ProjetsEditor() {
                     imageId: resData.imagePublicId || resData.publicId || "",
                   },
                 }
-              : b,
+              : b
           );
 
           URL.revokeObjectURL(pending.previewUrl);
@@ -647,11 +664,17 @@ export default function ProjetsEditor() {
         }
       }
 
-      // Sauvegarde dans Firebase
+      // ✅ Sauvegarde dans Firebase AVEC introduction
       const docRef = doc(db2, "website_content", "projets");
-      await updateDoc(docRef, { projets: updatedprojets });
+      await updateDoc(docRef, {
+        introduction: data.introduction,
+        projets: updatedprojets,
+      });
 
-      setData({ projets: updatedprojets });
+      setData({
+        introduction: data.introduction,
+        projets: updatedprojets,
+      });
       setPendingImages(new Map());
       setToast({ msg: "Sauvegarde réussie !", type: "success" });
     } catch (e: any) {
@@ -668,6 +691,7 @@ export default function ProjetsEditor() {
   // ============================================
   // RENDER SECTION (ACCORDÉON COMPACT)
   // ============================================
+
   const hexToRgba = (hex: string, alpha: number) => {
     let c: any;
     if (/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)) {
@@ -680,6 +704,7 @@ export default function ProjetsEditor() {
     }
     return hex;
   };
+
   const renderSection = (box: FeatureBox, index: number) => {
     const isExpanded = expandedSection === box.id;
     const hasPendingImage = pendingImages.has(box.id);
@@ -968,7 +993,6 @@ export default function ProjetsEditor() {
                     fontSize: "0.75rem",
                     "&:hover": { background: alpha(primaryColor, 0.9) },
                   }}
-                  
                 >
                   Upload
                   <input
@@ -1012,7 +1036,7 @@ export default function ProjetsEditor() {
                 <FormControl size="small" fullWidth variant="outlined">
                   <InputLabel style={{ fontSize: 13 }}>Logo</InputLabel>
                   <Select
-                    value={box.image.logo ?? ""} // ← FIX ICI
+                    value={box.image.logo ?? ""}
                     label="Logo"
                     onChange={(e) =>
                       updateBox(box.id, {
@@ -1026,6 +1050,9 @@ export default function ProjetsEditor() {
                       },
                     }}
                   >
+                    <MenuItem value="" sx={{ fontSize: 13 }}>
+                      <em>Aucun logo</em>
+                    </MenuItem>
                     {/* Liste des logos */}
                     {logosLoading ? (
                       <MenuItem disabled sx={{ fontSize: 13 }}>
@@ -1348,7 +1375,7 @@ export default function ProjetsEditor() {
                               updateListGroupTitle(
                                 box.id,
                                 group.id,
-                                e.target.value,
+                                e.target.value
                               )
                             }
                           />
@@ -1401,7 +1428,7 @@ export default function ProjetsEditor() {
                                     box.id,
                                     group.id,
                                     item.id,
-                                    e.target.value,
+                                    e.target.value
                                   )
                                 }
                               />
@@ -1550,7 +1577,7 @@ export default function ProjetsEditor() {
                 {...compactStyles.button}
                 startIcon={
                   saving ? (
-                    <CircularProgress size={14} color="inherit" />
+                    <CircularProgress size={14}  />
                   ) : (
                     <SaveIcon sx={{ fontSize: 16 }} />
                   )
@@ -1560,13 +1587,13 @@ export default function ProjetsEditor() {
                 sx={{
                   ...compactStyles.button.sx,
                   bgcolor: hasPendingChanges ? "#ed6c02" : "white",
-                  color: hasPendingChanges ? "white" : THEME_COLORS.olive,
+                  color: hasPendingChanges ?THEME_COLORS.olive  :"white" ,
                   "&:hover": {
                     bgcolor: hasPendingChanges ? "#e65100" : "#f5f5f5",
                   },
                   "&:disabled": {
                     bgcolor: "#ccc",
-                    color: "#666",
+                    color: "#ffffff",
                   },
                 }}
               >
@@ -1585,6 +1612,7 @@ export default function ProjetsEditor() {
       {tabValue === 0 && (
         <ProjetsPreview
           projets={data.projets}
+          // introduction={data.introduction}
           onAddBox={addBox}
           themeColor={THEME_COLORS.olive}
           maxHeight="80vh"
@@ -1606,6 +1634,21 @@ export default function ProjetsEditor() {
             onClose={() => setOpen(false)}
             url="projets"
           />
+
+          {/* ✅ CHAMP INTRODUCTION CONNECTÉ */}
+          <StyledTextField
+            fullWidth
+            label="Introduction"
+            value={data.introduction}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              updateIntroduction(e.target.value)
+            }
+            multiline
+            rows={3}
+            placeholder="Ex: Une agence de communication engagée..."
+            sx={{ my: 1, borderRadius: 1 }}
+          />
+
           <Stack direction="row" justifyContent="flex-end" sx={{ mb: 1.5 }}>
             <Button
               variant="contained"

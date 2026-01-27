@@ -18,7 +18,6 @@ import {
   HourglassEmpty as PendingIcon,
   Close as CloseIcon,
   AutoAwesome as SparkleIcon,
-  DragIndicator as DragIcon,
   Business as BusinessIcon,
 } from "@mui/icons-material";
 
@@ -55,21 +54,19 @@ import {
 } from "@mui/material";
 
 // Import du composant preview
-import { Handshake } from "lucide-react";
-import Partenaire from "./preview/Partners";
+import { ImageIcon } from "lucide-react";
 import LogoList from "../LogoList";
 
 // --- Types ---
-interface PartenaireItem {
+interface LogoItem {
   id: string;
   name: string;
   image: string;
   imagePublicId?: string;
-  order: number;
 }
 
-interface PartenaireData {
-  partenaires: PartenaireItem[];
+interface LogoData {
+  logos: LogoItem[];
 }
 
 interface PendingImage {
@@ -124,39 +121,35 @@ const generateId = () =>
   `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
 // --- Données statiques par défaut ---
-const DEFAULT_PARTENAIRES: PartenaireItem[] = [
+const DEFAULT_LOGOS: LogoItem[] = [
   {
-    id: "p1",
-    name: "Partenaire Alpha",
-    image: "/logos/partner-1.png",
+    id: "l1",
+    name: "Logo Alpha",
+    image: "/logos/logo-1.png",
     imagePublicId: "",
-    order: 1,
   },
   {
-    id: "p2",
-    name: "Partenaire Beta",
-    image: "/logos/partner-2.png",
+    id: "l2",
+    name: "Logo Beta",
+    image: "/logos/logo-2.png",
     imagePublicId: "",
-    order: 2,
   },
   {
-    id: "p3",
-    name: "Partenaire Gamma",
-    image: "/logos/partner-3.png",
+    id: "l3",
+    name: "Logo Gamma",
+    image: "/logos/logo-3.png",
     imagePublicId: "",
-    order: 3,
   },
   {
-    id: "p4",
-    name: "Partenaire Delta",
-    image: "/logos/partner-4.png",
+    id: "l4",
+    name: "Logo Delta",
+    image: "/logos/logo-4.png",
     imagePublicId: "",
-    order: 4,
   },
 ];
 
-const DEFAULT_DATA: PartenaireData = {
-  partenaires: DEFAULT_PARTENAIRES,
+const DEFAULT_DATA: LogoData = {
+  logos: DEFAULT_LOGOS,
 };
 
 // ============================================
@@ -170,7 +163,7 @@ export default function LogoEditor() {
   const [modalOpen, setModalOpen] = useState(false);
 
   // États
-  const [data, setData] = useState<PartenaireData | null>(null);
+  const [data, setData] = useState<LogoData | null>(null);
   const [loading, setLoading] = useState(true);
   const [tabValue, setTabValue] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -185,10 +178,10 @@ export default function LogoEditor() {
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
 
   // Dialog pour ajout/édition
-  const [partenaireDialog, setPartenaireDialog] = useState<{
+  const [logoDialog, setLogoDialog] = useState<{
     open: boolean;
     mode: "add" | "edit";
-    data: PartenaireItem | null;
+    data: LogoItem | null;
   }>({ open: false, mode: "add", data: null });
 
   // ============================================
@@ -202,22 +195,17 @@ export default function LogoEditor() {
       (snapshot) => {
         if (snapshot.exists()) {
           const docData = snapshot.data();
-          const partenaireData: PartenaireData = {
-            partenaires: Array.isArray(docData.partenaires)
-              ? docData.partenaires
-                  .map((p: any) => ({
-                    id: p.id || generateId(),
-                    name: p.name || "",
-                    image: p.image || "",
-                    imagePublicId: p.imagePublicId || "",
-                    order: p.order || 0,
-                  }))
-                  .sort(
-                    (a: PartenaireItem, b: PartenaireItem) => a.order - b.order
-                  )
-              : DEFAULT_PARTENAIRES,
+          const logoData: LogoData = {
+            logos: Array.isArray(docData.logos)
+              ? docData.logos.map((l: any) => ({
+                  id: l.id || generateId(),
+                  name: l.name || "",
+                  image: l.image || "",
+                  imagePublicId: l.imagePublicId || "",
+                }))
+              : DEFAULT_LOGOS,
           };
-          setData(partenaireData);
+          setData(logoData);
         } else {
           setDoc(docRef, DEFAULT_DATA);
           setData(DEFAULT_DATA);
@@ -274,11 +262,9 @@ export default function LogoEditor() {
           const formData = new FormData();
           formData.append("file", compressedFile);
 
-          const existingPartenaire = data.partenaires.find(
-            (p) => p.id === pending.itemId
-          );
-          if (existingPartenaire?.imagePublicId) {
-            formData.append("publicId", existingPartenaire.imagePublicId);
+          const existingLogo = data.logos.find((l) => l.id === pending.itemId);
+          if (existingLogo?.imagePublicId) {
+            formData.append("publicId", existingLogo.imagePublicId);
           }
 
           const res = await fetch("/api/cloudinary/uploadweb/logo", {
@@ -292,14 +278,14 @@ export default function LogoEditor() {
             throw new Error(resData.error || "Erreur upload");
           }
 
-          finalData.partenaires = finalData.partenaires.map((p) =>
-            p.id === pending.itemId
+          finalData.logos = finalData.logos.map((l) =>
+            l.id === pending.itemId
               ? {
-                  ...p,
+                  ...l,
                   image: resData.imageUrl,
                   imagePublicId: resData.imagePublicId,
                 }
-              : p
+              : l
           );
 
           URL.revokeObjectURL(pending.previewUrl);
@@ -313,7 +299,7 @@ export default function LogoEditor() {
       setData(finalData);
 
       await updateDoc(doc(db, "website_content", "logo"), {
-        partenaires: finalData.partenaires,
+        logos: finalData.logos,
       });
 
       if (uploadErrors.length > 0) {
@@ -333,14 +319,10 @@ export default function LogoEditor() {
   };
 
   // ============================================
-  // ACTIONS PARTENAIRES
+  // ACTIONS LOGOS
   // ============================================
-  const handleAddPartenaire = () => {
-    const maxOrder = data?.partenaires.length
-      ? Math.max(...data.partenaires.map((p) => p.order))
-      : 0;
-
-    setPartenaireDialog({
+  const handleAddLogo = () => {
+    setLogoDialog({
       open: true,
       mode: "add",
       data: {
@@ -348,53 +330,48 @@ export default function LogoEditor() {
         name: "",
         image: "",
         imagePublicId: "",
-        order: maxOrder + 1,
       },
     });
   };
 
-  const handleEditPartenaire = (partenaire: PartenaireItem) => {
-    setPartenaireDialog({ open: true, mode: "edit", data: { ...partenaire } });
+  const handleEditLogo = (logo: LogoItem) => {
+    setLogoDialog({ open: true, mode: "edit", data: { ...logo } });
   };
 
-  const handleSavePartenaireDialog = () => {
-    if (!data || !partenaireDialog.data) return;
+  const handleSaveLogoDialog = () => {
+    if (!data || !logoDialog.data) return;
 
-    if (partenaireDialog.mode === "add") {
+    if (logoDialog.mode === "add") {
       setData({
         ...data,
-        partenaires: [...data.partenaires, partenaireDialog.data].sort(
-          (a, b) => a.order - b.order
-        ),
+        logos: [...data.logos, logoDialog.data],
       });
     } else {
       setData({
         ...data,
-        partenaires: data.partenaires
-          .map((p) =>
-            p.id === partenaireDialog.data!.id ? partenaireDialog.data! : p
-          )
-          .sort((a, b) => a.order - b.order),
+        logos: data.logos.map((l) =>
+          l.id === logoDialog.data!.id ? logoDialog.data! : l
+        ),
       });
     }
-    setPartenaireDialog({ open: false, mode: "add", data: null });
+    setLogoDialog({ open: false, mode: "add", data: null });
     setToast({ msg: "N'oubliez pas d'enregistrer", type: "info" });
   };
 
-  const handleDeletePartenaire = async (partenaireId: string) => {
+  const handleDeleteLogo = async (logoId: string) => {
     if (!data) return;
-    const partenaire = data.partenaires.find((p) => p.id === partenaireId);
-    if (!partenaire) return;
+    const logo = data.logos.find((l) => l.id === logoId);
+    if (!logo) return;
 
-    setDeletingItem(partenaireId);
+    setDeletingItem(logoId);
     try {
       // Supprimer l'image de Cloudinary si elle existe
-      if (partenaire.imagePublicId && !isPendingImage(partenaire.image)) {
+      if (logo.imagePublicId && !isPendingImage(logo.image)) {
         try {
           await fetch("/api/cloudinary/deleteweb", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ publicId: partenaire.imagePublicId }),
+            body: JSON.stringify({ publicId: logo.imagePublicId }),
           });
         } catch (e) {
           console.warn("⚠️ Erreur suppression Cloudinary:", e);
@@ -403,16 +380,16 @@ export default function LogoEditor() {
 
       // Nettoyer les pending images
       const pendingToRemove = pendingImages.filter(
-        (p) => p.itemId === partenaireId
+        (p) => p.itemId === logoId
       );
       pendingToRemove.forEach((p) => URL.revokeObjectURL(p.previewUrl));
-      setPendingImages((prev) => prev.filter((p) => p.itemId !== partenaireId));
+      setPendingImages((prev) => prev.filter((p) => p.itemId !== logoId));
 
       setData({
         ...data,
-        partenaires: data.partenaires.filter((p) => p.id !== partenaireId),
+        logos: data.logos.filter((l) => l.id !== logoId),
       });
-      setToast({ msg: "logo supprimé", type: "success" });
+      setToast({ msg: "Logo supprimé", type: "success" });
     } catch (e) {
       console.error("❌ Erreur suppression:", e);
       setToast({ msg: "Erreur suppression", type: "error" });
@@ -421,19 +398,19 @@ export default function LogoEditor() {
     }
   };
 
-  const handlePartenaireImageSelect = (file: File) => {
-    if (!partenaireDialog.data) return;
+  const handleLogoImageSelect = (file: File) => {
+    if (!logoDialog.data) return;
 
     const previewUrl = URL.createObjectURL(file);
 
     setPendingImages((prev) => [
-      ...prev.filter((p) => p.itemId !== partenaireDialog.data!.id),
-      { file, previewUrl, itemId: partenaireDialog.data!.id },
+      ...prev.filter((p) => p.itemId !== logoDialog.data!.id),
+      { file, previewUrl, itemId: logoDialog.data!.id },
     ]);
 
-    setPartenaireDialog({
-      ...partenaireDialog,
-      data: { ...partenaireDialog.data!, image: previewUrl },
+    setLogoDialog({
+      ...logoDialog,
+      data: { ...logoDialog.data!, image: previewUrl },
     });
   };
 
@@ -460,17 +437,15 @@ export default function LogoEditor() {
   return (
     <>
       {/* ========== BOUTON DÉCLENCHEUR ========== */}
-      <Tooltip title="Gérer les Logo" arrow>
+      <Tooltip title="Gérer les logos" arrow>
         <Button
           variant="contained"
-          startIcon={<Handshake style={{ width: 20, height: 20 }} />}
+          startIcon={<ImageIcon style={{ width: 20, height: 20 }} />}
           onClick={() => setModalOpen(true)}
           sx={{
             background: THEME.primary.gradient,
             textTransform: "none",
             fontWeight: 600,
-            // px: 3,
-            // py: 1.5,
             borderRadius: 2,
             boxShadow: "0 4px 14px rgba(97, 102, 55, 0.3)",
             "&:hover": {
@@ -481,7 +456,7 @@ export default function LogoEditor() {
           }}
           size="small"
         >
-          Gérer les logo
+          Gérer les logos
           {pendingCount > 0 && (
             <Chip
               size="small"
@@ -491,8 +466,6 @@ export default function LogoEditor() {
                 bgcolor: THEME.accent.orange,
                 color: "white",
                 fontWeight: 700,
-                // height: 22,
-                // minWidth: 22,
               }}
             />
           )}
@@ -503,7 +476,6 @@ export default function LogoEditor() {
       <Dialog
         open={modalOpen}
         onClose={handleCloseModal}
-        // maxWidth="lg"
         fullWidth
         fullScreen={isMobile}
         PaperProps={{
@@ -543,14 +515,20 @@ export default function LogoEditor() {
                   justifyContent: "center",
                 }}
               >
-                <Handshake style={{ width: 24, height: 24, color: "white" }} />
+                <ImageIcon style={{ width: 24, height: 24, color: "white" }} />
               </Box>
               <Box>
                 <Typography variant="h6" fontWeight={700} color="white">
-                  Gestion des logo
+                  Gestion des logos
                 </Typography>
-                <Typography variant="caption" sx={{ color: alpha("#fff", 0.7) }}>
-                 <span style={{fontWeight:"bold"}}>{data?.partenaires.length || 0}</span>  logo disponible
+                <Typography
+                  variant="caption"
+                  sx={{ color: alpha("#fff", 0.7) }}
+                >
+                  <span style={{ fontWeight: "bold" }}>
+                    {data?.logos.length || 0}
+                  </span>{" "}
+                  logo{(data?.logos.length || 0) > 1 ? "s" : ""} disponible{(data?.logos.length || 0) > 1 ? "s" : ""}
                 </Typography>
               </Box>
             </Stack>
@@ -683,7 +661,7 @@ export default function LogoEditor() {
                         color={THEME.neutral[600]}
                         fontWeight={500}
                       >
-                        {data.partenaires.length} logo enregistré
+                        {data.logos.length} logo{data.logos.length > 1 ? "s" : ""} enregistré{data.logos.length > 1 ? "s" : ""}
                       </Typography>
 
                       <Stack
@@ -712,7 +690,7 @@ export default function LogoEditor() {
                           variant="outlined"
                           size="small"
                           startIcon={<AddIcon />}
-                          onClick={handleAddPartenaire}
+                          onClick={handleAddLogo}
                           sx={{
                             borderRadius: 2,
                             textTransform: "none",
@@ -726,16 +704,16 @@ export default function LogoEditor() {
                       </Stack>
                     </Paper>
 
-                    {/* ========== LISTE DES PARTENAIRES ========== */}
+                    {/* ========== LISTE DES LOGOS ========== */}
                     <Grid container spacing={2}>
-                      {data.partenaires.map((partenaire, index) => (
+                      {data.logos.map((logo, index) => (
                         <Grid
                           item
                           xs={6}
                           sm={4}
                           md={3}
                           lg={4}
-                          key={partenaire.id}
+                          key={logo.id}
                         >
                           <Grow in timeout={200 + index * 50}>
                             <Card
@@ -745,7 +723,7 @@ export default function LogoEditor() {
                                 flexDirection: "column",
                                 borderRadius: 2,
                                 overflow: "hidden",
-                                border: isPendingImage(partenaire.image)
+                                border: isPendingImage(logo.image)
                                   ? `2px dashed ${THEME.accent.orange}`
                                   : `1px solid ${THEME.neutral[200]}`,
                                 transition: "all 0.2s ease",
@@ -757,7 +735,7 @@ export default function LogoEditor() {
                             >
                               {/* Image */}
                               <Box sx={{ position: "relative" }}>
-                                {isPendingImage(partenaire.image) && (
+                                {isPendingImage(logo.image) && (
                                   <Chip
                                     label="⏳"
                                     size="small"
@@ -773,21 +751,6 @@ export default function LogoEditor() {
                                     }}
                                   />
                                 )}
-                                <Chip
-                                  label={`#${partenaire.order}`}
-                                  size="small"
-                                  sx={{
-                                    position: "absolute",
-                                    top: 6,
-                                    right: 6,
-                                    zIndex: 5,
-                                    bgcolor: alpha(THEME.primary.main, 0.9),
-                                    color: "white",
-                                    fontWeight: 700,
-                                    fontSize: "0.65rem",
-                                    height: 20,
-                                  }}
-                                />
                                 <CardMedia
                                   sx={{
                                     height: 100,
@@ -798,11 +761,11 @@ export default function LogoEditor() {
                                     p: 2,
                                   }}
                                 >
-                                  {partenaire.image ? (
+                                  {logo.image ? (
                                     <Box
                                       component="img"
-                                      src={partenaire.image}
-                                      alt={partenaire.name}
+                                      src={logo.image}
+                                      alt={logo.name}
                                       sx={{
                                         maxWidth: "100%",
                                         maxHeight: "100%",
@@ -831,7 +794,7 @@ export default function LogoEditor() {
                                   }}
                                   noWrap
                                 >
-                                  {partenaire.name || "Sans nom"}
+                                  {logo.name || "Sans nom"}
                                 </Typography>
                               </CardContent>
 
@@ -845,9 +808,7 @@ export default function LogoEditor() {
                               >
                                 <IconButton
                                   size="small"
-                                  onClick={() =>
-                                    handleEditPartenaire(partenaire)
-                                  }
+                                  onClick={() => handleEditLogo(logo)}
                                   sx={{
                                     color: THEME.primary.main,
                                     p: 0.5,
@@ -857,16 +818,14 @@ export default function LogoEditor() {
                                 </IconButton>
                                 <IconButton
                                   size="small"
-                                  onClick={() =>
-                                    handleDeletePartenaire(partenaire.id)
-                                  }
-                                  disabled={deletingItem === partenaire.id}
+                                  onClick={() => handleDeleteLogo(logo.id)}
+                                  disabled={deletingItem === logo.id}
                                   sx={{
                                     color: "#EF4444",
                                     p: 0.5,
                                   }}
                                 >
-                                  {deletingItem === partenaire.id ? (
+                                  {deletingItem === logo.id ? (
                                     <CircularProgress
                                       size={14}
                                       sx={{ color: "#EF4444" }}
@@ -882,7 +841,7 @@ export default function LogoEditor() {
                       ))}
 
                       {/* Empty State */}
-                      {data.partenaires.length === 0 && (
+                      {data.logos.length === 0 && (
                         <Grid item xs={12}>
                           <Paper
                             sx={{
@@ -906,7 +865,7 @@ export default function LogoEditor() {
                                 mb: 2,
                               }}
                             >
-                              <Handshake
+                              <ImageIcon
                                 style={{
                                   width: 30,
                                   height: 30,
@@ -918,13 +877,13 @@ export default function LogoEditor() {
                               variant="body1"
                               sx={{ color: THEME.neutral[700], mb: 1 }}
                             >
-                              Aucun partenaire
+                              Aucun logo
                             </Typography>
                             <Button
                               variant="contained"
                               size="small"
                               startIcon={<AddIcon />}
-                              onClick={handleAddPartenaire}
+                              onClick={handleAddLogo}
                               sx={{
                                 mt: 1,
                                 background: THEME.primary.gradient,
@@ -933,7 +892,7 @@ export default function LogoEditor() {
                                 borderRadius: 2,
                               }}
                             >
-                              Ajouter
+                              Ajouter un logo
                             </Button>
                           </Paper>
                         </Grid>
@@ -999,12 +958,10 @@ export default function LogoEditor() {
         </DialogActions>
       </Dialog>
 
-      {/* ========== DIALOG PARTENAIRE (édition/ajout) ========== */}
+      {/* ========== DIALOG LOGO (édition/ajout) ========== */}
       <Dialog
-        open={partenaireDialog.open}
-        onClose={() =>
-          setPartenaireDialog({ open: false, mode: "add", data: null })
-        }
+        open={logoDialog.open}
+        onClose={() => setLogoDialog({ open: false, mode: "add", data: null })}
         maxWidth="sm"
         fullWidth
         PaperProps={{ sx: { borderRadius: 3, overflow: "hidden" } }}
@@ -1020,16 +977,14 @@ export default function LogoEditor() {
           }}
         >
           <Stack direction="row" spacing={2} alignItems="center">
-            <Handshake style={{ width: 24, height: 24 }} />
+            <ImageIcon style={{ width: 24, height: 24 }} />
             <Typography variant="h6" fontWeight={600}>
-              {partenaireDialog.mode === "add"
-                ? "Nouveau Logo"
-                : "Modifier le logo"}
+              {logoDialog.mode === "add" ? "Nouveau Logo" : "Modifier le logo"}
             </Typography>
           </Stack>
           <IconButton
             onClick={() =>
-              setPartenaireDialog({ open: false, mode: "add", data: null })
+              setLogoDialog({ open: false, mode: "add", data: null })
             }
             sx={{ color: "white" }}
           >
@@ -1037,7 +992,7 @@ export default function LogoEditor() {
           </IconButton>
         </DialogTitle>
         <DialogContent sx={{ p: 3 }}>
-          {partenaireDialog.data && (
+          {logoDialog.data && (
             <Stack spacing={3} sx={{ mt: 1 }}>
               {/* Image Upload */}
               <Box>
@@ -1045,7 +1000,7 @@ export default function LogoEditor() {
                   variant="subtitle2"
                   sx={{ fontWeight: 600, mb: 1.5 }}
                 >
-                  Logo / Image
+                  Image du logo
                 </Typography>
                 <Box
                   sx={{
@@ -1055,7 +1010,7 @@ export default function LogoEditor() {
                     borderRadius: 2,
                     overflow: "hidden",
                     position: "relative",
-                    border: isPendingImage(partenaireDialog.data.image)
+                    border: isPendingImage(logoDialog.data.image)
                       ? `2px dashed ${THEME.accent.orange}`
                       : `2px dashed ${THEME.neutral[300]}`,
                     display: "flex",
@@ -1063,11 +1018,11 @@ export default function LogoEditor() {
                     justifyContent: "center",
                   }}
                 >
-                  {partenaireDialog.data.image ? (
+                  {logoDialog.data.image ? (
                     <>
                       <Box
                         component="img"
-                        src={partenaireDialog.data.image}
+                        src={logoDialog.data.image}
                         alt="Logo"
                         sx={{
                           maxWidth: "80%",
@@ -1075,7 +1030,7 @@ export default function LogoEditor() {
                           objectFit: "contain",
                         }}
                       />
-                      {isPendingImage(partenaireDialog.data.image) && (
+                      {isPendingImage(logoDialog.data.image) && (
                         <Chip
                           icon={<PendingIcon sx={{ fontSize: 12 }} />}
                           label="En attente"
@@ -1124,7 +1079,7 @@ export default function LogoEditor() {
                     type="file"
                     onChange={(e) =>
                       e.target.files?.[0] &&
-                      handlePartenaireImageSelect(e.target.files[0])
+                      handleLogoImageSelect(e.target.files[0])
                     }
                   />
                 </Button>
@@ -1132,42 +1087,17 @@ export default function LogoEditor() {
 
               {/* Nom */}
               <TextField
-                label="Nom "
+                label="Nom du logo"
                 fullWidth
                 size="small"
-                value={partenaireDialog.data.name}
+                value={logoDialog.data.name}
                 onChange={(e) =>
-                  setPartenaireDialog({
-                    ...partenaireDialog,
-                    data: { ...partenaireDialog.data!, name: e.target.value },
+                  setLogoDialog({
+                    ...logoDialog,
+                    data: { ...logoDialog.data!, name: e.target.value },
                   })
                 }
-                placeholder="Ex: Entreprise XYZ"
-                sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
-              />
-
-              {/* Ordre */}
-              <TextField
-                label="Ordre d'affichage"
-                type="number"
-                fullWidth
-                size="small"
-                value={partenaireDialog.data.order}
-                onChange={(e) =>
-                  setPartenaireDialog({
-                    ...partenaireDialog,
-                    data: {
-                      ...partenaireDialog.data!,
-                      order: parseInt(e.target.value) || 0,
-                    },
-                  })
-                }
-                helperText="Ordre croissant d'affichage"
-                InputProps={{
-                  startAdornment: (
-                    <DragIcon sx={{ mr: 1, color: THEME.neutral[400] }} />
-                  ),
-                }}
+                placeholder="Ex: Mon Logo"
                 sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
               />
             </Stack>
@@ -1178,7 +1108,7 @@ export default function LogoEditor() {
         >
           <Button
             onClick={() =>
-              setPartenaireDialog({ open: false, mode: "add", data: null })
+              setLogoDialog({ open: false, mode: "add", data: null })
             }
             sx={{ textTransform: "none", color: THEME.neutral[600] }}
           >
@@ -1186,8 +1116,8 @@ export default function LogoEditor() {
           </Button>
           <Button
             variant="contained"
-            onClick={handleSavePartenaireDialog}
-            disabled={!partenaireDialog.data?.name}
+            onClick={handleSaveLogoDialog}
+            disabled={!logoDialog.data?.name}
             sx={{
               background: THEME.primary.gradient,
               textTransform: "none",
@@ -1196,7 +1126,7 @@ export default function LogoEditor() {
               borderRadius: 2,
             }}
           >
-            {partenaireDialog.mode === "add" ? "Ajouter" : "Enregistrer"}
+            {logoDialog.mode === "add" ? "Ajouter" : "Enregistrer"}
           </Button>
         </DialogActions>
       </Dialog>

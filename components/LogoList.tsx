@@ -25,12 +25,10 @@ interface Logo {
   id: string;
   image: string;
   name?: string;
-  order: number;
-  link?: string;
 }
 
 interface LogoData {
-  partenaires: Logo[];
+  logos: Logo[];
 }
 
 /* ================= COMPONENT ================= */
@@ -50,9 +48,7 @@ const LogoList: React.FC = () => {
         if (snap.exists()) {
           const data = snap.data() as LogoData;
           setLogos(
-            [...(data.partenaires || [])].sort(
-              (a, b) => a.order - b.order
-            )
+            [...(data.logos || [])]
           );
         } else {
           setLogos([]);
@@ -114,7 +110,7 @@ const LogoList: React.FC = () => {
       <Box py={8} textAlign="center" color="text.secondary">
         <SentimentDissatisfiedIcon sx={{ fontSize: 60, mb: 2, opacity: 0.5 }} />
         <Typography variant="h6">
-          Aucun partenaire disponible
+          Aucun logo disponible
         </Typography>
       </Box>
     );
@@ -172,9 +168,7 @@ const LogoList: React.FC = () => {
             <Grid item xs={6} sm={4} md={3} lg={2} key={logo.id}>
               <Fade in timeout={300 + index * 120}>
                 <Card
-                  component={logo.link ? "a" : "div"}
-                  href={logo.link}
-                  target="_blank"
+                component={"article"}
                   rel="noopener noreferrer"
                   elevation={4}
                   sx={{

@@ -21,7 +21,7 @@ const StyledTextField: React.FC<StyledTextFieldProps> = ({
     sx={{
       "& .MuiOutlinedInput-root": {
         backgroundColor: "#fff",
-        borderRadius: 2,
+        borderRadius: 1,
         transition: "all 0.2s ease",
         "&:hover": {
           backgroundColor: "#fafafa",
@@ -33,12 +33,13 @@ const StyledTextField: React.FC<StyledTextFieldProps> = ({
           backgroundColor: "#fff",
           boxShadow: "0 0 0 3px rgba(99, 102, 241, 0.1)",
           "& .MuiOutlinedInput-notchedOutline": {
-            borderColor: "#6366f1",
+            borderColor: "#bfc685",
           },
         },
       },
       "& .MuiInputLabel-root.Mui-focused": {
-        color: "#6366f1",
+        color: "#6b6f45",
+        fontWeight:"bold"
       },
       ...sx,
     }}
