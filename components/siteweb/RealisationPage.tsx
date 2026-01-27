@@ -28,6 +28,10 @@ import {
   Movie as MovieIcon,
   YouTube as YouTubeIcon,
   Warning as WarningIcon,
+  Language as WebIcon,
+  Code as CodeIcon,
+  OpenInNew as OpenInNewIcon,
+  Devices as DevicesIcon,
 } from "@mui/icons-material";
 
 import {
@@ -88,15 +92,30 @@ interface PhotoItem {
   date: string;
 }
 
+// ✅ Nouveau type pour les projets digitaux
+interface DigitalProjectItem {
+  id: string;
+  title: string;
+  description: string;
+  projectUrl: string;
+  image: string;
+  imagePublicId?: string;
+  client: string;
+  date: string;
+  technologies?: string[];
+}
+
 interface RealisationData {
   videos: VideoItem[];
   photos: PhotoItem[];
+  digitalProjects: DigitalProjectItem[]; // ✅ Nouvelle propriété
 }
 
 interface PendingImage {
   file: File;
   previewUrl: string;
   itemId: string;
+  type: "photo" | "digitalProject"; // ✅ Ajout du type
 }
 
 // ✅ Type pour l'image temporaire dans le dialog
@@ -112,6 +131,25 @@ const CLIENT_OPTIONS = [
   { value: "sosialy", label: "SOSIALY", color: "#10B981" },
   { value: "market", label: "TT MARKET PLACE", color: "#F59E0B" },
   { value: "autre", label: "AUTRE", color: "#7f7f7f" },
+];
+
+// ✅ Technologies disponibles pour les projets digitaux
+const TECHNOLOGY_OPTIONS = [
+  { value: "react", label: "React", color: "#61DAFB" },
+  { value: "nextjs", label: "Next.js", color: "#000000" },
+  { value: "vue", label: "Vue.js", color: "#4FC08D" },
+  { value: "angular", label: "Angular", color: "#DD0031" },
+  { value: "nodejs", label: "Node.js", color: "#339933" },
+  { value: "wordpress", label: "WordPress", color: "#21759B" },
+  { value: "shopify", label: "Shopify", color: "#7AB55C" },
+  { value: "firebase", label: "Firebase", color: "#FFCA28" },
+  { value: "mongodb", label: "MongoDB", color: "#47A248" },
+  { value: "tailwind", label: "Tailwind CSS", color: "#06B6D4" },
+  { value: "typescript", label: "TypeScript", color: "#3178C6" },
+  { value: "php", label: "PHP", color: "#777BB4" },
+  { value: "laravel", label: "Laravel", color: "#FF2D20" },
+  { value: "flutter", label: "Flutter", color: "#02569B" },
+  { value: "reactnative", label: "React Native", color: "#61DAFB" },
 ];
 
 // --- Theme Colors ---
@@ -131,6 +169,13 @@ const THEME = {
   youtube: {
     main: "#616637",
     gradient: "linear-gradient(135deg, #3B3E21 0%, #8C915D 100%)",
+  },
+  // ✅ Nouveau thème pour les projets digitaux
+  digital: {
+    main: "#3B82F6",
+    light: "#60A5FA",
+    dark: "#1D4ED8",
+    gradient: "linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)",
   },
   accent: {
     orange: "#F59E0B",
@@ -179,6 +224,11 @@ const getClientColor = (client: string): string => {
   return found?.color || THEME.neutral[500];
 };
 
+const getTechColor = (tech: string): string => {
+  const found = TECHNOLOGY_OPTIONS.find((t) => t.value === tech);
+  return found?.color || THEME.neutral[500];
+};
+
 const getYouTubeVideoId = (url: string): string | null => {
   if (!url) return null;
 
@@ -206,6 +256,17 @@ const isValidYouTubeUrl = (url: string): boolean => {
   return getYouTubeVideoId(url) !== null;
 };
 
+// ✅ Validation d'URL de projet
+const isValidProjectUrl = (url: string): boolean => {
+  if (!url) return false;
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 // --- Valeurs par défaut ---
 const DEFAULT_DATA: RealisationData = {
   videos: [
@@ -230,6 +291,20 @@ const DEFAULT_DATA: RealisationData = {
       date: new Date().toISOString().split("T")[0],
     },
   ],
+  // ✅ Projets digitaux par défaut
+  digitalProjects: [
+    {
+      id: "dp1",
+      title: "Site E-commerce Exemple",
+      description: "Plateforme de vente en ligne moderne et responsive.",
+      projectUrl: "https://example.com",
+      image: "",
+      imagePublicId: "",
+      client: "market",
+      date: new Date().toISOString().split("T")[0],
+      technologies: ["react", "nextjs", "tailwind"],
+    },
+  ],
 };
 
 // ============================================
@@ -244,7 +319,9 @@ export default function RealisationEditor() {
   const [data, setData] = useState<RealisationData | null>(null);
   const [loading, setLoading] = useState(true);
   const [tabValue, setTabValue] = useState(0);
-  const [editorTab, setEditorTab] = useState<"videos" | "photos">("videos");
+  const [editorTab, setEditorTab] = useState<
+    "videos" | "photos" | "digitalProjects"
+  >("videos"); // ✅ Ajout de digitalProjects
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingItem, setDeletingItem] = useState<string | null>(null);
@@ -254,20 +331,24 @@ export default function RealisationEditor() {
     type: "success" | "error" | "warning" | "info";
   } | null>(null);
 
-  // ✅ Pending images pour les NOUVELLES photos uniquement
+  // ✅ Pending images pour les NOUVELLES photos et projets digitaux
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
 
   // ✅ IDs des nouvelles vidéos en attente (ADD uniquement)
   const [pendingNewVideoIds, setPendingNewVideoIds] = useState<Set<string>>(
-    new Set(),
+    new Set()
   );
 
   // ✅ IDs des nouvelles photos en attente (ADD uniquement, sans image)
   const [pendingNewPhotoIds, setPendingNewPhotoIds] = useState<Set<string>>(
-    new Set(),
+    new Set()
   );
 
-  // ✅ Image temporaire dans le dialog photo (pas encore confirmée)
+  // ✅ IDs des nouveaux projets digitaux en attente
+  const [pendingNewDigitalProjectIds, setPendingNewDigitalProjectIds] =
+    useState<Set<string>>(new Set());
+
+  // ✅ Image temporaire dans le dialog (pas encore confirmée)
   const [tempDialogImage, setTempDialogImage] =
     useState<TempDialogImage | null>(null);
 
@@ -281,6 +362,13 @@ export default function RealisationEditor() {
     open: boolean;
     mode: "add" | "edit";
     data: PhotoItem | null;
+  }>({ open: false, mode: "add", data: null });
+
+  // ✅ Dialog pour les projets digitaux
+  const [digitalProjectDialog, setDigitalProjectDialog] = useState<{
+    open: boolean;
+    mode: "add" | "edit";
+    data: DigitalProjectItem | null;
   }>({ open: false, mode: "add", data: null });
 
   // ============================================
@@ -318,6 +406,23 @@ export default function RealisationEditor() {
                     p.date || p.year || new Date().toISOString().split("T")[0],
                 }))
               : DEFAULT_DATA.photos,
+            // ✅ Chargement des projets digitaux
+            digitalProjects: Array.isArray(docData.digitalProjects)
+              ? docData.digitalProjects.map((dp: any) => ({
+                  id: dp.id || generateId(),
+                  title: dp.title || "",
+                  description: dp.description || "",
+                  projectUrl: dp.projectUrl || "",
+                  image: dp.image || "",
+                  imagePublicId: dp.imagePublicId || "",
+                  client: dp.client || "",
+                  date:
+                    dp.date ||
+                    dp.year ||
+                    new Date().toISOString().split("T")[0],
+                  technologies: dp.technologies || [],
+                }))
+              : DEFAULT_DATA.digitalProjects,
           };
           setData(realisationData);
         } else {
@@ -330,7 +435,7 @@ export default function RealisationEditor() {
         console.error("Erreur Firebase:", error);
         setToast({ msg: "Erreur de connexion", type: "error" });
         setLoading(false);
-      },
+      }
     );
 
     return () => unsubscribe();
@@ -351,13 +456,13 @@ export default function RealisationEditor() {
   // ============================================
   const isPendingImage = useCallback(
     (url: string): boolean => pendingImages.some((p) => p.previewUrl === url),
-    [pendingImages],
+    [pendingImages]
   );
 
   // ✅ Vérifier si une vidéo est en attente (nouvelle uniquement)
   const isPendingVideo = useCallback(
     (videoId: string): boolean => pendingNewVideoIds.has(videoId),
-    [pendingNewVideoIds],
+    [pendingNewVideoIds]
   );
 
   // ✅ Vérifier si une photo est en attente (nouvelle uniquement)
@@ -365,19 +470,41 @@ export default function RealisationEditor() {
     (photoId: string): boolean => {
       return (
         pendingNewPhotoIds.has(photoId) ||
-        pendingImages.some((p) => p.itemId === photoId)
+        pendingImages.some(
+          (p) => p.itemId === photoId && p.type === "photo"
+        )
       );
     },
-    [pendingNewPhotoIds, pendingImages],
+    [pendingNewPhotoIds, pendingImages]
+  );
+
+  // ✅ Vérifier si un projet digital est en attente
+  const isPendingDigitalProject = useCallback(
+    (projectId: string): boolean => {
+      return (
+        pendingNewDigitalProjectIds.has(projectId) ||
+        pendingImages.some(
+          (p) => p.itemId === projectId && p.type === "digitalProject"
+        )
+      );
+    },
+    [pendingNewDigitalProjectIds, pendingImages]
   );
 
   // ✅ Compteurs
   const totalPendingPhotos = new Set([
-    ...pendingImages.map((p) => p.itemId),
+    ...pendingImages.filter((p) => p.type === "photo").map((p) => p.itemId),
     ...Array.from(pendingNewPhotoIds),
   ]).size;
 
   const totalPendingVideos = pendingNewVideoIds.size;
+
+  const totalPendingDigitalProjects = new Set([
+    ...pendingImages
+      .filter((p) => p.type === "digitalProject")
+      .map((p) => p.itemId),
+    ...Array.from(pendingNewDigitalProjectIds),
+  ]).size;
 
   // ✅ Générer le label du Chip
   const getPendingLabel = (): string => {
@@ -385,24 +512,36 @@ export default function RealisationEditor() {
 
     if (totalPendingVideos > 0) {
       parts.push(
-        `${totalPendingVideos} vidéo${totalPendingVideos > 1 ? "s" : ""}`,
+        `${totalPendingVideos} vidéo${totalPendingVideos > 1 ? "s" : ""}`
       );
     }
 
     if (totalPendingPhotos > 0) {
       parts.push(
-        `${totalPendingPhotos} photo${totalPendingPhotos > 1 ? "s" : ""}`,
+        `${totalPendingPhotos} photo${totalPendingPhotos > 1 ? "s" : ""}`
+      );
+    }
+
+    if (totalPendingDigitalProjects > 0) {
+      parts.push(
+        `${totalPendingDigitalProjects} projet${
+          totalPendingDigitalProjects > 1 ? "s" : ""
+        }`
       );
     }
 
     if (parts.length === 0) return "";
 
-    return `${parts.join(" et ")} en attente`;
+    return `${parts.join(", ")} en attente`;
   };
 
   // ✅ Vérifie s'il y a des modifications à sauvegarder
-  const hasChangesToSave = totalPendingVideos > 0 || totalPendingPhotos > 0;
-  const totalPendingCount = totalPendingVideos + totalPendingPhotos;
+  const hasChangesToSave =
+    totalPendingVideos > 0 ||
+    totalPendingPhotos > 0 ||
+    totalPendingDigitalProjects > 0;
+  const totalPendingCount =
+    totalPendingVideos + totalPendingPhotos + totalPendingDigitalProjects;
 
   // ============================================
   // SAUVEGARDE DES NOUVEAUX ÉLÉMENTS UNIQUEMENT
@@ -416,12 +555,12 @@ export default function RealisationEditor() {
       let finalData = { ...data };
       const uploadErrors: string[] = [];
 
-      // Upload des images pour les nouvelles photos
+      // Upload des images pour les nouvelles photos et projets digitaux
       for (const pending of pendingImages) {
         try {
           const compressedFile = await imageCompression(
             pending.file,
-            COMPRESSION_OPTIONS,
+            COMPRESSION_OPTIONS
           );
 
           const formData = new FormData();
@@ -432,7 +571,7 @@ export default function RealisationEditor() {
             {
               method: "POST",
               body: formData,
-            },
+            }
           );
 
           const resData = await res.json();
@@ -441,15 +580,27 @@ export default function RealisationEditor() {
             throw new Error(resData.error || "Erreur upload");
           }
 
-          finalData.photos = finalData.photos.map((p) =>
-            p.id === pending.itemId
-              ? {
-                  ...p,
-                  image: resData.imageUrl,
-                  imagePublicId: resData.imagePublicId,
-                }
-              : p,
-          );
+          if (pending.type === "photo") {
+            finalData.photos = finalData.photos.map((p) =>
+              p.id === pending.itemId
+                ? {
+                    ...p,
+                    image: resData.imageUrl,
+                    imagePublicId: resData.imagePublicId,
+                  }
+                : p
+            );
+          } else if (pending.type === "digitalProject") {
+            finalData.digitalProjects = finalData.digitalProjects.map((dp) =>
+              dp.id === pending.itemId
+                ? {
+                    ...dp,
+                    image: resData.imageUrl,
+                    imagePublicId: resData.imagePublicId,
+                  }
+                : dp
+            );
+          }
 
           URL.revokeObjectURL(pending.previewUrl);
         } catch (e: any) {
@@ -462,6 +613,7 @@ export default function RealisationEditor() {
       setPendingImages([]);
       setPendingNewVideoIds(new Set());
       setPendingNewPhotoIds(new Set());
+      setPendingNewDigitalProjectIds(new Set());
 
       setData(finalData);
 
@@ -469,6 +621,7 @@ export default function RealisationEditor() {
       await updateDoc(doc(db, "website_content", "realisation_section"), {
         videos: finalData.videos,
         photos: finalData.photos,
+        digitalProjects: finalData.digitalProjects,
       });
 
       if (uploadErrors.length > 0) {
@@ -510,19 +663,16 @@ export default function RealisationEditor() {
     setVideoDialog({ open: true, mode: "edit", data: { ...video } });
   };
 
-  // ✅ Fermer le dialog vidéo
   const handleCloseVideoDialog = () => {
     setVideoDialog({ open: false, mode: "add", data: null });
   };
 
-  // ✅ ADD = en attente, EDIT = direct Firebase
   const handleSaveVideoDialog = async () => {
     if (!data || !videoDialog.data) return;
 
     const videoId = videoDialog.data.id;
 
     if (videoDialog.mode === "add") {
-      // ✅ ADD : Ajouter localement et mettre en attente
       setData({ ...data, videos: [...data.videos, videoDialog.data] });
       setPendingNewVideoIds((prev) => new Set([...prev, videoId]));
       setToast({
@@ -530,11 +680,10 @@ export default function RealisationEditor() {
         type: "info",
       });
     } else {
-      // ✅ EDIT : Envoyer directement à Firebase
       setUpdatingItem(videoId);
       try {
         const updatedVideos = data.videos.map((v) =>
-          v.id === videoId ? videoDialog.data! : v,
+          v.id === videoId ? videoDialog.data! : v
         );
 
         await updateDoc(doc(db, "website_content", "realisation_section"), {
@@ -554,11 +703,9 @@ export default function RealisationEditor() {
     handleCloseVideoDialog();
   };
 
-  // ✅ DELETE : Direct Firebase
   const handleDeleteVideo = async (videoId: string) => {
     if (!data) return;
 
-    // Si c'est une vidéo en attente (non encore sauvegardée), juste la retirer localement
     if (pendingNewVideoIds.has(videoId)) {
       setPendingNewVideoIds((prev) => {
         const newSet = new Set(prev);
@@ -570,7 +717,6 @@ export default function RealisationEditor() {
       return;
     }
 
-    // Sinon, supprimer directement de Firebase
     setDeletingItem(videoId);
     try {
       const updatedVideos = data.videos.filter((v) => v.id !== videoId);
@@ -593,7 +739,6 @@ export default function RealisationEditor() {
   // ACTIONS PHOTOS
   // ============================================
   const handleAddPhoto = () => {
-    // Nettoyer l'image temporaire précédente si elle existe
     if (tempDialogImage) {
       URL.revokeObjectURL(tempDialogImage.previewUrl);
       setTempDialogImage(null);
@@ -615,7 +760,6 @@ export default function RealisationEditor() {
   };
 
   const handleEditPhoto = (photo: PhotoItem) => {
-    // Nettoyer l'image temporaire précédente si elle existe
     if (tempDialogImage) {
       URL.revokeObjectURL(tempDialogImage.previewUrl);
       setTempDialogImage(null);
@@ -624,9 +768,7 @@ export default function RealisationEditor() {
     setPhotoDialog({ open: true, mode: "edit", data: { ...photo } });
   };
 
-  // ✅ Fermer le dialog photo et nettoyer l'image temporaire
   const handleClosePhotoDialog = () => {
-    // ✅ Nettoyer l'image temporaire (non confirmée)
     if (tempDialogImage) {
       URL.revokeObjectURL(tempDialogImage.previewUrl);
       setTempDialogImage(null);
@@ -635,38 +777,31 @@ export default function RealisationEditor() {
     setPhotoDialog({ open: false, mode: "add", data: null });
   };
 
-  // ✅ Sélection d'image dans le dialog (temporaire, pas encore en attente)
   const handlePhotoImageSelect = (file: File) => {
     if (!photoDialog.data) return;
 
-    // Nettoyer l'ancienne image temporaire si elle existe
     if (tempDialogImage) {
       URL.revokeObjectURL(tempDialogImage.previewUrl);
     }
 
     const previewUrl = URL.createObjectURL(file);
 
-    // ✅ Stocker dans l'état temporaire (pas dans pendingImages)
     setTempDialogImage({ file, previewUrl });
 
-    // Mettre à jour le dialog pour l'aperçu
     setPhotoDialog({
       ...photoDialog,
       data: { ...photoDialog.data, image: previewUrl },
     });
   };
 
-  // ✅ ADD = en attente avec image, EDIT = direct Firebase
   const handleSavePhotoDialog = async () => {
     if (!data || !photoDialog.data) return;
 
     const photoId = photoDialog.data.id;
 
     if (photoDialog.mode === "add") {
-      // ✅ ADD : Ajouter localement et mettre en attente
       setData({ ...data, photos: [...data.photos, photoDialog.data] });
 
-      // ✅ Si une image a été sélectionnée, l'ajouter à pendingImages
       if (tempDialogImage) {
         setPendingImages((prev) => [
           ...prev,
@@ -674,12 +809,11 @@ export default function RealisationEditor() {
             file: tempDialogImage.file,
             previewUrl: tempDialogImage.previewUrl,
             itemId: photoId,
+            type: "photo",
           },
         ]);
-        // Ne pas nettoyer tempDialogImage ici car l'URL est maintenant dans pendingImages
         setTempDialogImage(null);
       } else {
-        // Pas d'image, juste les métadonnées
         setPendingNewPhotoIds((prev) => new Set([...prev, photoId]));
       }
 
@@ -688,22 +822,19 @@ export default function RealisationEditor() {
         type: "info",
       });
     } else {
-      // ✅ EDIT : Envoyer directement à Firebase
       setUpdatingItem(photoId);
       try {
         let updatedPhoto = { ...photoDialog.data };
 
-        // Si une nouvelle image a été sélectionnée, l'uploader
         if (tempDialogImage) {
           const compressedFile = await imageCompression(
             tempDialogImage.file,
-            COMPRESSION_OPTIONS,
+            COMPRESSION_OPTIONS
           );
 
           const formData = new FormData();
           formData.append("file", compressedFile);
 
-          // Si l'ancienne photo avait un publicId, l'envoyer pour remplacement
           const existingPhoto = data.photos.find((p) => p.id === photoId);
           if (existingPhoto?.imagePublicId) {
             formData.append("publicId", existingPhoto.imagePublicId);
@@ -714,7 +845,7 @@ export default function RealisationEditor() {
             {
               method: "POST",
               body: formData,
-            },
+            }
           );
 
           const resData = await res.json();
@@ -729,13 +860,12 @@ export default function RealisationEditor() {
             imagePublicId: resData.imagePublicId,
           };
 
-          // Nettoyer l'URL temporaire
           URL.revokeObjectURL(tempDialogImage.previewUrl);
           setTempDialogImage(null);
         }
 
         const updatedPhotos = data.photos.map((p) =>
-          p.id === photoId ? updatedPhoto : p,
+          p.id === photoId ? updatedPhoto : p
         );
 
         await updateDoc(doc(db, "website_content", "realisation_section"), {
@@ -752,20 +882,18 @@ export default function RealisationEditor() {
       }
     }
 
-    // Fermer le dialog (sans nettoyer tempDialogImage car déjà géré)
     setPhotoDialog({ open: false, mode: "add", data: null });
   };
 
-  // ✅ DELETE : Direct Firebase ou local si en attente
   const handleDeletePhoto = async (photoId: string) => {
     if (!data) return;
     const photo = data.photos.find((p) => p.id === photoId);
     if (!photo) return;
 
-    // Si c'est une photo en attente (non encore sauvegardée), juste la retirer localement
     if (isPendingPhoto(photoId)) {
-      // Nettoyer l'image pending si elle existe
-      const pendingImage = pendingImages.find((p) => p.itemId === photoId);
+      const pendingImage = pendingImages.find(
+        (p) => p.itemId === photoId && p.type === "photo"
+      );
       if (pendingImage) {
         URL.revokeObjectURL(pendingImage.previewUrl);
         setPendingImages((prev) => prev.filter((p) => p.itemId !== photoId));
@@ -782,10 +910,8 @@ export default function RealisationEditor() {
       return;
     }
 
-    // Sinon, supprimer directement de Firebase + Cloudinary
     setDeletingItem(photoId);
     try {
-      // Supprimer l'image de Cloudinary si elle existe
       if (photo.imagePublicId) {
         try {
           await fetch("/api/cloudinary/deleteweb", {
@@ -814,13 +940,228 @@ export default function RealisationEditor() {
     }
   };
 
+  // ============================================
+  // ✅ ACTIONS PROJETS DIGITAUX
+  // ============================================
+  const handleAddDigitalProject = () => {
+    if (tempDialogImage) {
+      URL.revokeObjectURL(tempDialogImage.previewUrl);
+      setTempDialogImage(null);
+    }
+
+    setDigitalProjectDialog({
+      open: true,
+      mode: "add",
+      data: {
+        id: generateId(),
+        title: "",
+        description: "",
+        projectUrl: "",
+        image: "",
+        imagePublicId: "",
+        client: "",
+        date: new Date().toISOString().split("T")[0],
+        technologies: [],
+      },
+    });
+  };
+
+  const handleEditDigitalProject = (project: DigitalProjectItem) => {
+    if (tempDialogImage) {
+      URL.revokeObjectURL(tempDialogImage.previewUrl);
+      setTempDialogImage(null);
+    }
+
+    setDigitalProjectDialog({ open: true, mode: "edit", data: { ...project } });
+  };
+
+  const handleCloseDigitalProjectDialog = () => {
+    if (tempDialogImage) {
+      URL.revokeObjectURL(tempDialogImage.previewUrl);
+      setTempDialogImage(null);
+    }
+
+    setDigitalProjectDialog({ open: false, mode: "add", data: null });
+  };
+
+  const handleDigitalProjectImageSelect = (file: File) => {
+    if (!digitalProjectDialog.data) return;
+
+    if (tempDialogImage) {
+      URL.revokeObjectURL(tempDialogImage.previewUrl);
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+
+    setTempDialogImage({ file, previewUrl });
+
+    setDigitalProjectDialog({
+      ...digitalProjectDialog,
+      data: { ...digitalProjectDialog.data, image: previewUrl },
+    });
+  };
+
+  const handleSaveDigitalProjectDialog = async () => {
+    if (!data || !digitalProjectDialog.data) return;
+
+    const projectId = digitalProjectDialog.data.id;
+
+    if (digitalProjectDialog.mode === "add") {
+      setData({
+        ...data,
+        digitalProjects: [...data.digitalProjects, digitalProjectDialog.data],
+      });
+
+      if (tempDialogImage) {
+        setPendingImages((prev) => [
+          ...prev,
+          {
+            file: tempDialogImage.file,
+            previewUrl: tempDialogImage.previewUrl,
+            itemId: projectId,
+            type: "digitalProject",
+          },
+        ]);
+        setTempDialogImage(null);
+      } else {
+        setPendingNewDigitalProjectIds((prev) => new Set([...prev, projectId]));
+      }
+
+      setToast({
+        msg: "Projet ajouté - N'oubliez pas d'enregistrer",
+        type: "info",
+      });
+    } else {
+      setUpdatingItem(projectId);
+      try {
+        let updatedProject = { ...digitalProjectDialog.data };
+
+        if (tempDialogImage) {
+          const compressedFile = await imageCompression(
+            tempDialogImage.file,
+            COMPRESSION_OPTIONS
+          );
+
+          const formData = new FormData();
+          formData.append("file", compressedFile);
+
+          const existingProject = data.digitalProjects.find(
+            (p) => p.id === projectId
+          );
+          if (existingProject?.imagePublicId) {
+            formData.append("publicId", existingProject.imagePublicId);
+          }
+
+          const res = await fetch(
+            "/api/cloudinary/uploadweb/realisationimage",
+            {
+              method: "POST",
+              body: formData,
+            }
+          );
+
+          const resData = await res.json();
+
+          if (!res.ok) {
+            throw new Error(resData.error || "Erreur upload");
+          }
+
+          updatedProject = {
+            ...updatedProject,
+            image: resData.imageUrl,
+            imagePublicId: resData.imagePublicId,
+          };
+
+          URL.revokeObjectURL(tempDialogImage.previewUrl);
+          setTempDialogImage(null);
+        }
+
+        const updatedProjects = data.digitalProjects.map((p) =>
+          p.id === projectId ? updatedProject : p
+        );
+
+        await updateDoc(doc(db, "website_content", "realisation_section"), {
+          digitalProjects: updatedProjects,
+        });
+
+        setData({ ...data, digitalProjects: updatedProjects });
+        setToast({ msg: "Projet mis à jour !", type: "success" });
+      } catch (e: any) {
+        console.error("❌ Erreur mise à jour projet:", e);
+        setToast({ msg: "Erreur de mise à jour", type: "error" });
+      } finally {
+        setUpdatingItem(null);
+      }
+    }
+
+    setDigitalProjectDialog({ open: false, mode: "add", data: null });
+  };
+
+  const handleDeleteDigitalProject = async (projectId: string) => {
+    if (!data) return;
+    const project = data.digitalProjects.find((p) => p.id === projectId);
+    if (!project) return;
+
+    if (isPendingDigitalProject(projectId)) {
+      const pendingImage = pendingImages.find(
+        (p) => p.itemId === projectId && p.type === "digitalProject"
+      );
+      if (pendingImage) {
+        URL.revokeObjectURL(pendingImage.previewUrl);
+        setPendingImages((prev) => prev.filter((p) => p.itemId !== projectId));
+      }
+
+      setPendingNewDigitalProjectIds((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(projectId);
+        return newSet;
+      });
+
+      setData({
+        ...data,
+        digitalProjects: data.digitalProjects.filter((p) => p.id !== projectId),
+      });
+      setToast({ msg: "Projet retiré", type: "success" });
+      return;
+    }
+
+    setDeletingItem(projectId);
+    try {
+      if (project.imagePublicId) {
+        try {
+          await fetch("/api/cloudinary/deleteweb", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ publicId: project.imagePublicId }),
+          });
+        } catch (e) {
+          console.warn("⚠️ Erreur suppression Cloudinary:", e);
+        }
+      }
+
+      const updatedProjects = data.digitalProjects.filter(
+        (p) => p.id !== projectId
+      );
+
+      await updateDoc(doc(db, "website_content", "realisation_section"), {
+        digitalProjects: updatedProjects,
+      });
+
+      setData({ ...data, digitalProjects: updatedProjects });
+      setToast({ msg: "Projet supprimé !", type: "success" });
+    } catch (e: any) {
+      console.error("❌ Erreur suppression projet:", e);
+      setToast({ msg: "Erreur de suppression", type: "error" });
+    } finally {
+      setDeletingItem(null);
+    }
+  };
+
   // ✅ Annuler tous les éléments en attente
   const handleCancelAllChanges = () => {
-    // Nettoyer les images pending
     pendingImages.forEach((p) => URL.revokeObjectURL(p.previewUrl));
     setPendingImages([]);
 
-    // Retirer les nouvelles vidéos du state local
     if (data) {
       const newData = {
         ...data,
@@ -828,7 +1169,16 @@ export default function RealisationEditor() {
         photos: data.photos.filter(
           (p) =>
             !pendingNewPhotoIds.has(p.id) &&
-            !pendingImages.some((pi) => pi.itemId === p.id),
+            !pendingImages.some(
+              (pi) => pi.itemId === p.id && pi.type === "photo"
+            )
+        ),
+        digitalProjects: data.digitalProjects.filter(
+          (dp) =>
+            !pendingNewDigitalProjectIds.has(dp.id) &&
+            !pendingImages.some(
+              (pi) => pi.itemId === dp.id && pi.type === "digitalProject"
+            )
         ),
       };
       setData(newData);
@@ -836,9 +1186,11 @@ export default function RealisationEditor() {
 
     setPendingNewVideoIds(new Set());
     setPendingNewPhotoIds(new Set());
+    setPendingNewDigitalProjectIds(new Set());
 
     setToast({ msg: "Modifications annulées", type: "info" });
   };
+
   const [open, setOpen] = useState(true);
 
   // ============================================
@@ -999,7 +1351,7 @@ export default function RealisationEditor() {
                 gap: { xs: 1.5, md: 2 },
               }}
             >
-              {/* Tabs Vidéos/Photos */}
+              {/* ✅ Tabs Vidéos/Photos/Projets Digitaux */}
               <Box
                 sx={{
                   display: "flex",
@@ -1007,7 +1359,9 @@ export default function RealisationEditor() {
                   borderRadius: 2,
                   bgcolor: THEME.neutral[100],
                   width: { xs: "100%", md: "auto" },
-                  minWidth: { md: 320 },
+                  minWidth: { md: 480 },
+                  flexWrap: { xs: "wrap", sm: "nowrap" },
+                  gap: { xs: 0.5, sm: 0 },
                 }}
               >
                 <Button
@@ -1032,12 +1386,12 @@ export default function RealisationEditor() {
                     )
                   }
                   sx={{
-                    flex: 1,
-                    mr: { xs: 0.5, sm: 1 },
+                    flex: { xs: "1 1 45%", sm: 1 },
+                    mr: { xs: 0, sm: 0.5 },
                     borderRadius: 1.5,
                     textTransform: "none",
                     fontWeight: 600,
-                    fontSize: { xs: "0.7rem", sm: "0.8rem", md: "0.875rem" },
+                    fontSize: { xs: "0.65rem", sm: "0.75rem", md: "0.8rem" },
                     py: { xs: 0.75, sm: 1 },
                     color: editorTab === "videos" ? "white" : "#616637",
                     background:
@@ -1052,9 +1406,7 @@ export default function RealisationEditor() {
                     },
                   }}
                 >
-                  {isSmall
-                    ? `Vidéos (${data.videos.length})`
-                    : `Vidéos (${data.videos.length})`}
+                  {`Vidéos (${data.videos.length})`}
                 </Button>
                 <Button
                   onClick={() => setEditorTab("photos")}
@@ -1078,11 +1430,12 @@ export default function RealisationEditor() {
                     )
                   }
                   sx={{
-                    flex: 1,
+                    flex: { xs: "1 1 45%", sm: 1 },
+                    mr: { xs: 0, sm: 0.5 },
                     borderRadius: 1.5,
                     textTransform: "none",
                     fontWeight: 600,
-                    fontSize: { xs: "0.7rem", sm: "0.8rem", md: "0.875rem" },
+                    fontSize: { xs: "0.65rem", sm: "0.75rem", md: "0.8rem" },
                     py: { xs: 0.75, sm: 1 },
                     color: editorTab === "photos" ? "white" : "#616637",
                     background:
@@ -1097,9 +1450,56 @@ export default function RealisationEditor() {
                     },
                   }}
                 >
-                  {isSmall
-                    ? `Photos (${data.photos.length})`
-                    : `Photos (${data.photos.length})`}
+                  {`Photos (${data.photos.length})`}
+                </Button>
+                {/* ✅ Nouveau bouton pour Projets Digitaux */}
+                <Button
+                  onClick={() => setEditorTab("digitalProjects")}
+                  size="small"
+                  startIcon={
+                    !isSmall && (
+                      <Badge
+                        badgeContent={totalPendingDigitalProjects}
+                        sx={{
+                          "& .MuiBadge-badge": {
+                            background: THEME.accent.orange,
+                            color: "white",
+                            fontSize: "0.6rem",
+                            minWidth: 14,
+                            height: 14,
+                          },
+                        }}
+                      >
+                        <WebIcon sx={{ fontSize: { xs: 16, sm: 20 } }} />
+                      </Badge>
+                    )
+                  }
+                  sx={{
+                    flex: { xs: "1 1 100%", sm: 1 },
+                    borderRadius: 1.5,
+                    textTransform: "none",
+                    fontWeight: 600,
+                    fontSize: { xs: "0.65rem", sm: "0.75rem", md: "0.8rem" },
+                    py: { xs: 0.75, sm: 1 },
+                    color:
+                      editorTab === "digitalProjects" ? "white" : "#616637",
+                    background:
+                      editorTab === "digitalProjects"
+                        ? THEME.digital.main
+                        : "transparent",
+                    boxShadow:
+                      editorTab === "digitalProjects"
+                        ? "0 2px 8px rgba(59, 130, 246, 0.3)"
+                        : "none",
+                    "&:hover": {
+                      background:
+                        editorTab === "digitalProjects"
+                          ? THEME.digital.dark
+                          : "#D9CBC0",
+                    },
+                  }}
+                >
+                  {`Projets Web (${data.digitalProjects.length})`}
                 </Button>
               </Box>
 
@@ -1189,12 +1589,12 @@ export default function RealisationEditor() {
                       ? "..."
                       : "Sauvegarde..."
                     : hasChangesToSave
-                      ? isSmall
-                        ? `(${totalPendingCount})`
-                        : `Enregistrer (${totalPendingCount})`
-                      : isSmall
-                        ? "OK"
-                        : "Enregistrer"}
+                    ? isSmall
+                      ? `(${totalPendingCount})`
+                      : `Enregistrer (${totalPendingCount})`
+                    : isSmall
+                    ? "OK"
+                    : "Enregistrer"}
                 </Button>
               </Stack>
             </Paper>
@@ -1352,7 +1752,7 @@ export default function RealisationEditor() {
                                     }}
                                     onError={(e: any) => {
                                       e.target.src = `https://img.youtube.com/vi/${getYouTubeVideoId(
-                                        video.videoUrl,
+                                        video.videoUrl
                                       )}/hqdefault.jpg`;
                                     }}
                                   />
@@ -1496,7 +1896,7 @@ export default function RealisationEditor() {
                                     sx={{
                                       bgcolor: alpha(
                                         getClientColor(video.client),
-                                        0.1,
+                                        0.1
                                       ),
                                       color: getClientColor(video.client),
                                       fontWeight: 600,
@@ -1910,7 +2310,7 @@ export default function RealisationEditor() {
                                     sx={{
                                       bgcolor: alpha(
                                         getClientColor(photo.client),
-                                        0.1,
+                                        0.1
                                       ),
                                       color: getClientColor(photo.client),
                                       fontWeight: 600,
@@ -2084,6 +2484,577 @@ export default function RealisationEditor() {
                 </Grid>
               </Box>
             )}
+
+            {/* ========== ✅ SECTION PROJETS DIGITAUX ========== */}
+            {editorTab === "digitalProjects" && (
+              <Box>
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  justifyContent="space-between"
+                  alignItems={{ xs: "stretch", sm: "center" }}
+                  spacing={{ xs: 1.5, sm: 2 }}
+                  mb={{ xs: 2, md: 4 }}
+                >
+                  <Box>
+                    <Stack
+                      direction="row"
+                      alignItems="center"
+                      spacing={1}
+                      mb={0.5}
+                      flexWrap="wrap"
+                    >
+                      <WebIcon
+                        sx={{
+                          fontSize: { xs: 20, sm: 24 },
+                          color: THEME.digital.main,
+                        }}
+                      />
+                      <Typography
+                        variant="h6"
+                        sx={{
+                          fontWeight: 700,
+                          fontSize: {
+                            xs: "1.1rem",
+                            sm: "1.25rem",
+                            md: "1.5rem",
+                          },
+                        }}
+                      >
+                        Projets Digitaux
+                      </Typography>
+                      {totalPendingDigitalProjects > 0 && (
+                        <Chip
+                          size="small"
+                          label={`${totalPendingDigitalProjects} en attente`}
+                          sx={{
+                            bgcolor: THEME.accent.orange,
+                            color: "white",
+                            fontWeight: 600,
+                            fontSize: "0.65rem",
+                            height: 22,
+                          }}
+                        />
+                      )}
+                    </Stack>
+                    <Typography
+                      variant="body2"
+                      color={THEME.neutral[500]}
+                      sx={{ fontSize: { xs: "0.75rem", sm: "0.875rem" } }}
+                    >
+                      Sites web, applications et projets numériques
+                    </Typography>
+                  </Box>
+                  <Button
+                    variant="contained"
+                    startIcon={
+                      <AddIcon sx={{ fontSize: { xs: 18, sm: 20 } }} />
+                    }
+                    onClick={handleAddDigitalProject}
+                    size={isSmall ? "small" : "medium"}
+                    sx={{
+                      px: { xs: 2, sm: 3 },
+                      py: { xs: 1, sm: 1.5 },
+                      borderRadius: 2,
+                      textTransform: "none",
+                      fontWeight: 600,
+                      fontSize: { xs: "0.8rem", sm: "0.875rem" },
+                      background: THEME.digital.gradient,
+                      boxShadow: "0 4px 14px rgba(59, 130, 246, 0.4)",
+                      "&:hover": {
+                        transform: "translateY(-2px)",
+                        background: THEME.digital.dark,
+                      },
+                      transition: "all 0.3s ease",
+                    }}
+                  >
+                    {isSmall ? "Ajouter" : "Nouveau projet"}
+                  </Button>
+                </Stack>
+
+                <Grid container spacing={{ xs: 1.5, sm: 2, md: 3 }}>
+                  {data.digitalProjects.map((project, index) => {
+                    const isProjectPending = isPendingDigitalProject(
+                      project.id
+                    );
+
+                    return (
+                      <Grid item xs={6} sm={6} md={4} lg={3} key={project.id}>
+                        <Grow in timeout={300 + index * 100}>
+                          <Card
+                            sx={{
+                              height: "100%",
+                              display: "flex",
+                              flexDirection: "column",
+                              borderRadius: { xs: 2, md: 3 },
+                              overflow: "hidden",
+                              border: isProjectPending
+                                ? `2px dashed ${THEME.accent.orange}`
+                                : `1px solid ${THEME.neutral[200]}`,
+                              transition: "all 0.3s ease",
+                              "&:hover": {
+                                transform: {
+                                  xs: "none",
+                                  md: "translateY(-8px)",
+                                },
+                                boxShadow: {
+                                  xs: "0 4px 12px rgba(0,0,0,0.1)",
+                                  md: "0 20px 40px rgba(0,0,0,0.1)",
+                                },
+                                "& .project-overlay": { opacity: 1 },
+                              },
+                            }}
+                          >
+                            <Box sx={{ position: "relative" }}>
+                              {isProjectPending && (
+                                <Chip
+                                  icon={<PendingIcon sx={{ fontSize: 12 }} />}
+                                  label="En attente"
+                                  size="small"
+                                  sx={{
+                                    position: "absolute",
+                                    top: 8,
+                                    left: 8,
+                                    zIndex: 5,
+                                    bgcolor: THEME.accent.orange,
+                                    color: "white",
+                                    fontWeight: 600,
+                                    fontSize: "0.6rem",
+                                    height: 20,
+                                    "& .MuiChip-icon": { fontSize: 12 },
+                                  }}
+                                />
+                              )}
+                              <CardMedia
+                                sx={{
+                                  height: { xs: 120, sm: 160, md: 220 },
+                                  bgcolor: THEME.neutral[100],
+                                  position: "relative",
+                                }}
+                              >
+                                {project.image ? (
+                                  <>
+                                    <Box
+                                      component="img"
+                                      src={project.image}
+                                      alt={project.title}
+                                      sx={{
+                                        width: "100%",
+                                        height: "100%",
+                                        objectFit: "cover",
+                                      }}
+                                    />
+                                    <Box
+                                      className="project-overlay"
+                                      sx={{
+                                        position: "absolute",
+                                        inset: 0,
+                                        background:
+                                          "linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 60%)",
+                                        opacity: 0,
+                                        transition: "opacity 0.3s ease",
+                                        display: "flex",
+                                        alignItems: "flex-end",
+                                        justifyContent: "center",
+                                        pb: 2,
+                                      }}
+                                    >
+                                      {project.projectUrl && (
+                                        <Button
+                                          size="small"
+                                          variant="contained"
+                                          startIcon={<OpenInNewIcon />}
+                                          href={project.projectUrl}
+                                          target="_blank"
+                                          sx={{
+                                            bgcolor: "white",
+                                            color: THEME.digital.main,
+                                            textTransform: "none",
+                                            fontSize: "0.75rem",
+                                            "&:hover": {
+                                              bgcolor: THEME.neutral[100],
+                                            },
+                                          }}
+                                        >
+                                          Visiter
+                                        </Button>
+                                      )}
+                                    </Box>
+                                  </>
+                                ) : (
+                                  <Box
+                                    sx={{
+                                      height: "100%",
+                                      display: "flex",
+                                      flexDirection: "column",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      gap: 0.5,
+                                    }}
+                                  >
+                                    <DevicesIcon
+                                      sx={{
+                                        fontSize: { xs: 32, sm: 48, md: 60 },
+                                        color: THEME.neutral[300],
+                                      }}
+                                    />
+                                    {!isSmall && (
+                                      <Typography
+                                        variant="caption"
+                                        sx={{
+                                          color: THEME.neutral[500],
+                                          fontSize: "0.65rem",
+                                        }}
+                                      >
+                                        Ajoutez une capture d'écran
+                                      </Typography>
+                                    )}
+                                  </Box>
+                                )}
+
+                                <WebIcon
+                                  sx={{
+                                    position: "absolute",
+                                    top: { xs: 4, sm: 8, md: 12 },
+                                    right: { xs: 4, sm: 8, md: 12 },
+                                    bgcolor: alpha(THEME.digital.main, 0.9),
+                                    borderRadius: "50%",
+                                    width: { xs: 20, sm: 24, md: 30 },
+                                    height: { xs: 20, sm: 24, md: 30 },
+                                    boxShadow: "0 4px 10px rgba(0,0,0,0.25)",
+                                    color: "white",
+                                    p: { xs: 0.25, sm: 0.5 },
+                                  }}
+                                />
+                              </CardMedia>
+                            </Box>
+
+                            <CardContent
+                              sx={{
+                                flex: 1,
+                                p: { xs: 1, sm: 1.5, md: 2.5 },
+                              }}
+                            >
+                              <Typography
+                                variant="subtitle1"
+                                sx={{
+                                  fontWeight: 700,
+                                  color: THEME.neutral[800],
+                                  mb: 0.5,
+                                  fontSize: {
+                                    xs: "0.75rem",
+                                    sm: "0.875rem",
+                                    md: "1rem",
+                                  },
+                                  lineHeight: 1.3,
+                                }}
+                                noWrap
+                              >
+                                {project.title || "Sans titre"}
+                              </Typography>
+                              {!isSmall && (
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    color: THEME.neutral[500],
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    display: "-webkit-box",
+                                    WebkitLineClamp: 2,
+                                    WebkitBoxOrient: "vertical",
+                                    lineHeight: 1.4,
+                                    mb: 1,
+                                    minHeight: { sm: 36, md: 42 },
+                                    fontSize: { sm: "0.75rem", md: "0.875rem" },
+                                  }}
+                                >
+                                  {project.description || "Pas de description"}
+                                </Typography>
+                              )}
+
+                              {/* Technologies */}
+                              {project.technologies &&
+                                project.technologies.length > 0 && (
+                                  <Stack
+                                    direction="row"
+                                    spacing={0.5}
+                                    flexWrap="wrap"
+                                    gap={0.5}
+                                    mb={1}
+                                  >
+                                    {project.technologies
+                                      .slice(0, isSmall ? 2 : 3)
+                                      .map((tech) => (
+                                        <Chip
+                                          key={tech}
+                                          size="small"
+                                          icon={
+                                            <CodeIcon sx={{ fontSize: 10 }} />
+                                          }
+                                          label={
+                                            TECHNOLOGY_OPTIONS.find(
+                                              (t) => t.value === tech
+                                            )?.label || tech
+                                          }
+                                          sx={{
+                                            bgcolor: alpha(
+                                              getTechColor(tech),
+                                              0.1
+                                            ),
+                                            color: getTechColor(tech),
+                                            fontWeight: 500,
+                                            fontSize: {
+                                              xs: "0.5rem",
+                                              sm: "0.6rem",
+                                            },
+                                            height: { xs: 16, sm: 20 },
+                                            "& .MuiChip-icon": {
+                                              color: getTechColor(tech),
+                                            },
+                                          }}
+                                        />
+                                      ))}
+                                    {project.technologies.length >
+                                      (isSmall ? 2 : 3) && (
+                                      <Chip
+                                        size="small"
+                                        label={`+${
+                                          project.technologies.length -
+                                          (isSmall ? 2 : 3)
+                                        }`}
+                                        sx={{
+                                          bgcolor: THEME.neutral[200],
+                                          color: THEME.neutral[600],
+                                          fontWeight: 500,
+                                          fontSize: {
+                                            xs: "0.5rem",
+                                            sm: "0.6rem",
+                                          },
+                                          height: { xs: 16, sm: 20 },
+                                        }}
+                                      />
+                                    )}
+                                  </Stack>
+                                )}
+
+                              <Stack
+                                direction="row"
+                                spacing={0.5}
+                                alignItems="center"
+                                flexWrap="wrap"
+                                gap={0.5}
+                              >
+                                {project.client && (
+                                  <Chip
+                                    size="small"
+                                    label={project.client}
+                                    sx={{
+                                      bgcolor: alpha(
+                                        getClientColor(project.client),
+                                        0.1
+                                      ),
+                                      color: getClientColor(project.client),
+                                      fontWeight: 600,
+                                      fontSize: {
+                                        xs: "0.55rem",
+                                        sm: "0.65rem",
+                                        md: "0.75rem",
+                                      },
+                                      height: { xs: 18, sm: 22, md: 24 },
+                                    }}
+                                  />
+                                )}
+                                <Chip
+                                  size="small"
+                                  label={formatDateDisplay(project.date)}
+                                  variant="outlined"
+                                  sx={{
+                                    borderColor: THEME.neutral[300],
+                                    color: THEME.neutral[600],
+                                    fontSize: {
+                                      xs: "0.55rem",
+                                      sm: "0.65rem",
+                                      md: "0.75rem",
+                                    },
+                                    height: { xs: 18, sm: 22, md: 24 },
+                                  }}
+                                />
+                              </Stack>
+                            </CardContent>
+
+                            <Divider />
+
+                            <Stack
+                              direction="row"
+                              justifyContent="space-between"
+                              alignItems="center"
+                              spacing={0.5}
+                              sx={{
+                                p: { xs: 0.5, sm: 1, md: 1.5 },
+                                bgcolor: THEME.neutral[50],
+                              }}
+                            >
+                              {/* Lien vers le projet */}
+                              {project.projectUrl && (
+                                <IconButton
+                                  size="small"
+                                  href={project.projectUrl}
+                                  target="_blank"
+                                  sx={{
+                                    color: THEME.digital.main,
+                                    bgcolor: alpha(THEME.digital.main, 0.1),
+                                    width: { xs: 28, sm: 32, md: 36 },
+                                    height: { xs: 28, sm: 32, md: 36 },
+                                    "&:hover": {
+                                      bgcolor: alpha(THEME.digital.main, 0.2),
+                                    },
+                                  }}
+                                >
+                                  <OpenInNewIcon
+                                    sx={{
+                                      fontSize: { xs: 14, sm: 16, md: 18 },
+                                    }}
+                                  />
+                                </IconButton>
+                              )}
+
+                              <Box sx={{ flex: 1 }} />
+
+                              <IconButton
+                                size="small"
+                                onClick={() =>
+                                  handleEditDigitalProject(project)
+                                }
+                                disabled={updatingItem === project.id}
+                                sx={{
+                                  color: THEME.digital.main,
+                                  bgcolor: alpha(THEME.digital.main, 0.1),
+                                  width: { xs: 28, sm: 32, md: 36 },
+                                  height: { xs: 28, sm: 32, md: 36 },
+                                  "&:hover": {
+                                    bgcolor: alpha(THEME.digital.main, 0.2),
+                                  },
+                                }}
+                              >
+                                {updatingItem === project.id ? (
+                                  <CircularProgress
+                                    size={14}
+                                    sx={{ color: THEME.digital.main }}
+                                  />
+                                ) : (
+                                  <EditIcon
+                                    sx={{
+                                      fontSize: { xs: 14, sm: 16, md: 18 },
+                                    }}
+                                  />
+                                )}
+                              </IconButton>
+                              <IconButton
+                                size="small"
+                                onClick={() =>
+                                  handleDeleteDigitalProject(project.id)
+                                }
+                                disabled={deletingItem === project.id}
+                                sx={{
+                                  color: "#EF4444",
+                                  bgcolor: alpha("#EF4444", 0.1),
+                                  width: { xs: 28, sm: 32, md: 36 },
+                                  height: { xs: 28, sm: 32, md: 36 },
+                                  "&:hover": { bgcolor: alpha("#EF4444", 0.2) },
+                                }}
+                              >
+                                {deletingItem === project.id ? (
+                                  <CircularProgress
+                                    size={14}
+                                    sx={{ color: "#EF4444" }}
+                                  />
+                                ) : (
+                                  <DeleteIcon
+                                    sx={{
+                                      fontSize: { xs: 14, sm: 16, md: 18 },
+                                    }}
+                                  />
+                                )}
+                              </IconButton>
+                            </Stack>
+                          </Card>
+                        </Grow>
+                      </Grid>
+                    );
+                  })}
+
+                  {data.digitalProjects.length === 0 && (
+                    <Grid item xs={12}>
+                      <Paper
+                        sx={{
+                          p: { xs: 3, sm: 4, md: 6 },
+                          textAlign: "center",
+                          borderRadius: { xs: 2, md: 3 },
+                          bgcolor: "white",
+                          border: `2px dashed ${THEME.neutral[300]}`,
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            width: { xs: 50, sm: 60, md: 80 },
+                            height: { xs: 50, sm: 60, md: 80 },
+                            borderRadius: "50%",
+                            bgcolor: alpha(THEME.digital.main, 0.1),
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            mx: "auto",
+                            mb: { xs: 2, md: 3 },
+                          }}
+                        >
+                          <WebIcon
+                            sx={{
+                              fontSize: { xs: 28, sm: 32, md: 40 },
+                              color: THEME.digital.main,
+                            }}
+                          />
+                        </Box>
+                        <Typography
+                          variant="h6"
+                          sx={{
+                            color: THEME.neutral[700],
+                            mb: 1,
+                            fontSize: { xs: "1rem", md: "1.25rem" },
+                          }}
+                        >
+                          Aucun projet digital
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            color: THEME.neutral[500],
+                            mb: { xs: 2, md: 3 },
+                            fontSize: { xs: "0.75rem", md: "0.875rem" },
+                          }}
+                        >
+                          Ajoutez vos sites web et applications
+                        </Typography>
+                        <Button
+                          variant="contained"
+                          startIcon={<AddIcon />}
+                          onClick={handleAddDigitalProject}
+                          size={isSmall ? "small" : "medium"}
+                          sx={{
+                            background: THEME.digital.gradient,
+                            textTransform: "none",
+                            fontWeight: 600,
+                            px: { xs: 2, md: 4 },
+                            py: { xs: 1, md: 1.5 },
+                            borderRadius: 2,
+                          }}
+                        >
+                          Ajouter un projet
+                        </Button>
+                      </Paper>
+                    </Grid>
+                  )}
+                </Grid>
+              </Box>
+            )}
           </Box>
         </Fade>
       )}
@@ -2137,7 +3108,6 @@ export default function RealisationEditor() {
         <DialogContent sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
           {videoDialog.data && (
             <Stack spacing={{ xs: 2, sm: 3 }} pt={{ xs: 1, sm: 2 }}>
-              {/* Preview YouTube Thumbnail */}
               {isValidYouTubeUrl(videoDialog.data.videoUrl) && (
                 <Box
                   sx={{
@@ -2156,7 +3126,7 @@ export default function RealisationEditor() {
                     sx={{ width: "100%", height: "100%", objectFit: "cover" }}
                     onError={(e: any) => {
                       const videoId = getYouTubeVideoId(
-                        videoDialog.data!.videoUrl,
+                        videoDialog.data!.videoUrl
                       );
                       if (videoId) {
                         e.target.src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
@@ -2426,7 +3396,6 @@ export default function RealisationEditor() {
         <DialogContent sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
           {photoDialog.data && (
             <Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
-              {/* Image Upload */}
               <Grid item xs={12} md={5}>
                 <Typography
                   variant="subtitle2"
@@ -2552,7 +3521,6 @@ export default function RealisationEditor() {
                 )}
               </Grid>
 
-              {/* Form */}
               <Grid item xs={12} md={7}>
                 <Stack spacing={{ xs: 2, sm: 3 }}>
                   <TextField
@@ -2711,6 +3679,465 @@ export default function RealisationEditor() {
             {updatingItem === photoDialog.data?.id ? (
               <CircularProgress size={20} sx={{ color: "white" }} />
             ) : photoDialog.mode === "add" ? (
+              "Ajouter"
+            ) : (
+              "Mettre à jour"
+            )}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ========== ✅ DIALOG PROJET DIGITAL ========== */}
+      <Dialog
+        open={digitalProjectDialog.open}
+        onClose={handleCloseDigitalProjectDialog}
+        maxWidth="md"
+        fullWidth
+        fullScreen={isSmall}
+        PaperProps={{
+          sx: {
+            borderRadius: isSmall ? 0 : 3,
+            overflow: "hidden",
+            m: isSmall ? 0 : 2,
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            background: THEME.digital.gradient,
+            color: "white",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            py: { xs: 1.5, sm: 2 },
+            px: { xs: 2, sm: 3 },
+          }}
+        >
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <WebIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
+            <Typography
+              variant="h6"
+              fontWeight={600}
+              sx={{ fontSize: { xs: "1rem", sm: "1.25rem" } }}
+            >
+              {digitalProjectDialog.mode === "add"
+                ? "Nouveau projet digital"
+                : "Modifier le projet"}
+            </Typography>
+          </Stack>
+          <IconButton
+            onClick={handleCloseDigitalProjectDialog}
+            sx={{ color: "white" }}
+            size="small"
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
+          {digitalProjectDialog.data && (
+            <Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
+              {/* Image Upload */}
+              <Grid item xs={12} md={5}>
+                <Typography
+                  variant="subtitle2"
+                  sx={{
+                    fontWeight: 600,
+                    mb: 1.5,
+                    fontSize: { xs: "0.875rem", sm: "1rem" },
+                  }}
+                >
+                  Capture d'écran
+                </Typography>
+                <Box
+                  sx={{
+                    width: "100%",
+                    aspectRatio: { xs: "16/9", md: "4/3" },
+                    bgcolor: THEME.neutral[100],
+                    borderRadius: { xs: 2, md: 3 },
+                    overflow: "hidden",
+                    position: "relative",
+                    border: tempDialogImage
+                      ? `2px dashed ${THEME.accent.orange}`
+                      : `2px dashed ${THEME.neutral[300]}`,
+                    transition: "all 0.3s ease",
+                    "&:hover": { borderColor: THEME.digital.main },
+                  }}
+                >
+                  {digitalProjectDialog.data.image ? (
+                    <>
+                      <Box
+                        component="img"
+                        src={digitalProjectDialog.data.image}
+                        alt="Capture"
+                        sx={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
+                      />
+                      {tempDialogImage && (
+                        <Chip
+                          icon={<PendingIcon sx={{ fontSize: 12 }} />}
+                          label="Non confirmée"
+                          size="small"
+                          sx={{
+                            position: "absolute",
+                            top: 8,
+                            left: 8,
+                            bgcolor: THEME.accent.orange,
+                            color: "white",
+                            fontSize: "0.65rem",
+                          }}
+                        />
+                      )}
+                    </>
+                  ) : (
+                    <Stack
+                      alignItems="center"
+                      justifyContent="center"
+                      sx={{ height: "100%", gap: 1 }}
+                    >
+                      <DevicesIcon
+                        sx={{
+                          fontSize: { xs: 36, sm: 48 },
+                          color: THEME.neutral[400],
+                        }}
+                      />
+                      <Typography
+                        variant="body2"
+                        color={THEME.neutral[500]}
+                        sx={{ fontSize: { xs: "0.75rem", sm: "0.875rem" } }}
+                      >
+                        Capture d'écran du projet
+                      </Typography>
+                    </Stack>
+                  )}
+                </Box>
+                <Button
+                  component="label"
+                  variant="outlined"
+                  fullWidth
+                  size={isSmall ? "small" : "medium"}
+                  startIcon={<CloudUploadIcon />}
+                  sx={{
+                    mt: 2,
+                    py: { xs: 1, sm: 1.5 },
+                    borderRadius: 2,
+                    textTransform: "none",
+                    fontWeight: 600,
+                    borderColor: THEME.digital.main,
+                    color: THEME.digital.main,
+                    "&:hover": {
+                      bgcolor: alpha(THEME.digital.main, 0.1),
+                      borderColor: THEME.digital.main,
+                    },
+                  }}
+                >
+                  Choisir une image
+                  <input
+                    hidden
+                    accept="image/*"
+                    type="file"
+                    onChange={(e) =>
+                      e.target.files?.[0] &&
+                      handleDigitalProjectImageSelect(e.target.files[0])
+                    }
+                  />
+                </Button>
+              </Grid>
+
+                            {/* Form */}
+              <Grid item xs={12} md={7}>
+                <Stack spacing={{ xs: 2, sm: 3 }}>
+                  {/* URL du projet */}
+                  <TextField
+                    label="URL du projet"
+                    fullWidth
+                    size={isSmall ? "small" : "medium"}
+                    value={digitalProjectDialog.data.projectUrl}
+                    onChange={(e) =>
+                      setDigitalProjectDialog({
+                        ...digitalProjectDialog,
+                        data: {
+                          ...digitalProjectDialog.data!,
+                          projectUrl: e.target.value,
+                        },
+                      })
+                    }
+                    placeholder="https://www.exemple.com"
+                    helperText={
+                      digitalProjectDialog.data.projectUrl &&
+                      !isValidProjectUrl(digitalProjectDialog.data.projectUrl)
+                        ? "⚠️ URL invalide"
+                        : "Lien vers le site ou l'application"
+                    }
+                    error={
+                      digitalProjectDialog.data.projectUrl !== "" &&
+                      !isValidProjectUrl(digitalProjectDialog.data.projectUrl)
+                    }
+                    InputProps={{
+                      startAdornment: (
+                        <LinkIcon
+                          sx={{
+                            mr: 1,
+                            color: THEME.digital.main,
+                            fontSize: { xs: 18, sm: 24 },
+                          }}
+                        />
+                      ),
+                    }}
+                    sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+                  />
+
+                  <TextField
+                    label="Titre du projet"
+                    fullWidth
+                    size={isSmall ? "small" : "medium"}
+                    value={digitalProjectDialog.data.title}
+                    onChange={(e) =>
+                      setDigitalProjectDialog({
+                        ...digitalProjectDialog,
+                        data: {
+                          ...digitalProjectDialog.data!,
+                          title: e.target.value,
+                        },
+                      })
+                    }
+                    sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+                  />
+
+                  <TextField
+                    label="Description"
+                    fullWidth
+                    size={isSmall ? "small" : "medium"}
+                    multiline
+                    rows={isSmall ? 2 : 3}
+                    value={digitalProjectDialog.data.description}
+                    onChange={(e) =>
+                      setDigitalProjectDialog({
+                        ...digitalProjectDialog,
+                        data: {
+                          ...digitalProjectDialog.data!,
+                          description: e.target.value,
+                        },
+                      })
+                    }
+                    sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+                  />
+
+                  {/* Technologies */}
+                  <Box>
+                    <Typography
+                      variant="subtitle2"
+                      sx={{
+                        fontWeight: 600,
+                        mb: 1,
+                        fontSize: { xs: "0.875rem", sm: "1rem" },
+                      }}
+                    >
+                      Technologies utilisées
+                    </Typography>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: 1,
+                        p: 2,
+                        bgcolor: THEME.neutral[50],
+                        borderRadius: 2,
+                        border: `1px solid ${THEME.neutral[200]}`,
+                      }}
+                    >
+                      {TECHNOLOGY_OPTIONS.map((tech) => {
+                        const isSelected =
+                          digitalProjectDialog.data?.technologies?.includes(
+                            tech.value
+                          );
+                        return (
+                          <Chip
+                            key={tech.value}
+                            label={tech.label}
+                            size="small"
+                            icon={<CodeIcon sx={{ fontSize: 14 }} />}
+                            onClick={() => {
+                              const currentTechs =
+                                digitalProjectDialog.data?.technologies || [];
+                              const newTechs = isSelected
+                                ? currentTechs.filter((t) => t !== tech.value)
+                                : [...currentTechs, tech.value];
+                              setDigitalProjectDialog({
+                                ...digitalProjectDialog,
+                                data: {
+                                  ...digitalProjectDialog.data!,
+                                  technologies: newTechs,
+                                },
+                              });
+                            }}
+                            sx={{
+                              cursor: "pointer",
+                              bgcolor: isSelected
+                                ? alpha(tech.color, 0.2)
+                                : "white",
+                              color: isSelected ? tech.color : THEME.neutral[600],
+                              border: `1px solid ${
+                                isSelected ? tech.color : THEME.neutral[300]
+                              }`,
+                              fontWeight: isSelected ? 600 : 400,
+                              transition: "all 0.2s ease",
+                              "& .MuiChip-icon": {
+                                color: isSelected
+                                  ? tech.color
+                                  : THEME.neutral[400],
+                              },
+                              "&:hover": {
+                                bgcolor: alpha(tech.color, 0.1),
+                                borderColor: tech.color,
+                              },
+                            }}
+                          />
+                        );
+                      })}
+                    </Box>
+                    {digitalProjectDialog.data?.technologies &&
+                      digitalProjectDialog.data.technologies.length > 0 && (
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            display: "block",
+                            mt: 1,
+                            color: THEME.neutral[500],
+                          }}
+                        >
+                          {digitalProjectDialog.data.technologies.length}{" "}
+                          technologie(s) sélectionnée(s)
+                        </Typography>
+                      )}
+                  </Box>
+
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        select
+                        label="Client"
+                        fullWidth
+                        size={isSmall ? "small" : "medium"}
+                        value={digitalProjectDialog.data.client}
+                        onChange={(e) =>
+                          setDigitalProjectDialog({
+                            ...digitalProjectDialog,
+                            data: {
+                              ...digitalProjectDialog.data!,
+                              client: e.target.value,
+                            },
+                          })
+                        }
+                        sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+                      >
+                        {CLIENT_OPTIONS.map((client) => (
+                          <MenuItem key={client.value} value={client.value}>
+                            <Stack
+                              direction="row"
+                              alignItems="center"
+                              spacing={1}
+                            >
+                              <Box
+                                sx={{
+                                  width: 12,
+                                  height: 12,
+                                  borderRadius: "50%",
+                                  bgcolor: client.color,
+                                }}
+                              />
+                              <span
+                                style={{
+                                  fontSize: isSmall ? "0.875rem" : "1rem",
+                                }}
+                              >
+                                {client.label}
+                              </span>
+                            </Stack>
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        label="Date de réalisation"
+                        type="date"
+                        fullWidth
+                        size={isSmall ? "small" : "medium"}
+                        value={digitalProjectDialog.data.date}
+                        onChange={(e) =>
+                          setDigitalProjectDialog({
+                            ...digitalProjectDialog,
+                            data: {
+                              ...digitalProjectDialog.data!,
+                              date: e.target.value,
+                            },
+                          })
+                        }
+                        InputLabelProps={{ shrink: true }}
+                        InputProps={{
+                          startAdornment: (
+                            <CalendarIcon
+                              sx={{
+                                mr: 1,
+                                color: THEME.neutral[400],
+                                fontSize: { xs: 18, sm: 24 },
+                              }}
+                            />
+                          ),
+                        }}
+                        sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
+                      />
+                    </Grid>
+                  </Grid>
+                </Stack>
+              </Grid>
+            </Grid>
+          )}
+        </DialogContent>
+        <DialogActions
+          sx={{
+            p: { xs: 2, sm: 3 },
+            borderTop: `1px solid ${THEME.neutral[200]}`,
+            flexDirection: { xs: "column", sm: "row" },
+            gap: 1,
+          }}
+        >
+          <Button
+            onClick={handleCloseDigitalProjectDialog}
+            fullWidth={isSmall}
+            sx={{
+              textTransform: "none",
+              color: THEME.neutral[600],
+              px: 3,
+              order: { xs: 2, sm: 1 },
+            }}
+          >
+            Annuler
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSaveDigitalProjectDialog}
+            fullWidth={isSmall}
+            disabled={
+              !digitalProjectDialog.data?.title ||
+              updatingItem === digitalProjectDialog.data?.id
+            }
+            sx={{
+              background: THEME.digital.gradient,
+              textTransform: "none",
+              fontWeight: 600,
+              px: 4,
+              borderRadius: 2,
+              color: "white",
+              order: { xs: 1, sm: 2 },
+            }}
+          >
+            {updatingItem === digitalProjectDialog.data?.id ? (
+              <CircularProgress size={20} sx={{ color: "white" }} />
+            ) : digitalProjectDialog.mode === "add" ? (
               "Ajouter"
             ) : (
               "Mettre à jour"
