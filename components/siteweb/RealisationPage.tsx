@@ -454,10 +454,6 @@ export default function RealisationEditor() {
   // ============================================
   // HELPERS
   // ============================================
-  const isPendingImage = useCallback(
-    (url: string): boolean => pendingImages.some((p) => p.previewUrl === url),
-    [pendingImages]
-  );
 
   // ✅ Vérifier si une vidéo est en attente (nouvelle uniquement)
   const isPendingVideo = useCallback(

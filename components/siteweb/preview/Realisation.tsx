@@ -11,6 +11,7 @@ import {
   Camera,
   Calendar,
   Loader2,
+  Globe,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -57,30 +58,46 @@ interface PhotoItem {
   year: string;
   category?: string; // Ajouté dynamiquement
 }
-interface RealisationProps {
-  videos: VideoItem[];
-  photos: PhotoItem[];
+interface DigitalProjectItem {
+  id: string;
+  title: string;
+  description: string;
+  projectUrl: string;
+  image: string;
+  imagePublicId?: string;
+  client: string;
+  date: string;
+  technologies?: string[];
+  category?: string;
 }
 const categories = [
   { id: "all", label: "Tout", icon: Filter, color: "primary" },
   { id: "video", label: "Vidéo", icon: Video, color: "tertiary" },
   { id: "photo", label: "Photo", icon: Camera, color: "accent-warm" },
+  { id: "digital", label: "Projets digitaux", icon: Globe, color: "blue" },
   // J'ai gardé 'event' au cas où tu voudrais filtrer par client plus tard,
   // mais par défaut tes photos venant de l'éditeur seront 'photo'
   // { id: "event", label: "Événement", icon: Calendar, color: "primary" },
 ];
-
 export default function Realisation() {
   // États pour les données Firebase
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [digitalProjects, setDigitalProjects] = useState<DigitalProjectItem[]>(
+    [],
+  );
+  const ITEMS_PER_PAGE = 8;
 
   // États UI
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedVideo, setSelectedVideo] = useState<VideoItem | null>(null);
   const [selectedPhoto, setSelectedPhoto] = useState<PhotoItem | null>(null);
-
+  const [selectedDigitalProject, setSelectedDigitalProject] =
+    useState<DigitalProjectItem | null>(null);
+  const [currentVideoPage, setCurrentVideoPage] = useState(1);
+  const [currentPhotoPage, setCurrentPhotoPage] = useState(1);
+  const [currentDigitalPage, setCurrentDigitalPage] = useState(1);
   // --- Récupération des données Firebase ---
   useEffect(() => {
     const docRef = doc(db, "website_content", "realisation_section");
@@ -89,42 +106,82 @@ export default function Realisation() {
       if (snapshot.exists()) {
         const data = snapshot.data();
 
-        // Transformation des Vidéos
-        const loadedVideos = (data.videos || []).map((v: any) => ({
-          ...v,
-          category: "video", // On force la catégorie pour le filtre
-          thumbnail: getYouTubeThumbnail(v.videoUrl), // On génère la thumb depuis l'URL
-        }));
+        // Transformation des vidéos
+        const loadedVideos = (data.videos || [])
+          .map((v: any) => ({
+            ...v,
+            thumbnail: getYouTubeThumbnail(v.videoUrl),
+            category: "video",
+          }))
+          .reverse();
 
-        // Transformation des Photos
-        const loadedPhotos = (data.photos || []).map((p: any) => ({
-          ...p,
-          category: "photo", // On force la catégorie pour le filtre
-        }));
+        // Transformation des photos
+        const loadedPhotos = (data.photos || [])
+          .map((p: any) => ({
+            ...p,
+            category: "photo",
+          }))
+          .reverse();
+
+        // ✅ Transformation des projets digitaux
+        const loadedDigitalProjects = (data.digitalProjects || [])
+          .map((dp: any) => ({
+            ...dp,
+            category: "digital",
+            technologies: dp.technologies || [],
+          }))
+          .reverse();
 
         setVideos(loadedVideos);
         setPhotos(loadedPhotos);
+        setDigitalProjects(loadedDigitalProjects);
       }
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
-
   // --- Logique de filtrage ---
+  useEffect(() => {
+    setCurrentVideoPage(1);
+    setCurrentPhotoPage(1);
+    setCurrentDigitalPage(1);
+  }, [selectedCategory]);
+
+  // --- Filtres ---
   const filteredVideos =
-    selectedCategory === "all" || selectedCategory === "video"
-      ? videos.filter(
-          (v) => selectedCategory === "all" || v.category === selectedCategory,
-        )
-      : [];
+    selectedCategory === "all" || selectedCategory === "video" ? videos : [];
 
   const filteredPhotos =
-    selectedCategory === "all" || selectedCategory !== "video"
-      ? photos.filter(
-          (p) => selectedCategory === "all" || p.category === selectedCategory,
-        )
+    selectedCategory === "all" || selectedCategory === "photo" ? photos : [];
+
+  const filteredDigitalProjects =
+    selectedCategory === "all" || selectedCategory === "digital"
+      ? digitalProjects
       : [];
+
+  // --- Pagination Vidéos ---
+  const totalVideoPages = Math.ceil(filteredVideos.length / ITEMS_PER_PAGE);
+  const startVideoIndex = (currentVideoPage - 1) * ITEMS_PER_PAGE;
+  const endVideoIndex = startVideoIndex + ITEMS_PER_PAGE;
+  const paginatedVideos = filteredVideos.slice(startVideoIndex, endVideoIndex);
+
+  // --- Pagination Photos ---
+  const totalPhotoPages = Math.ceil(filteredPhotos.length / ITEMS_PER_PAGE);
+  const startPhotoIndex = (currentPhotoPage - 1) * ITEMS_PER_PAGE;
+  const endPhotoIndex = startPhotoIndex + ITEMS_PER_PAGE;
+  const paginatedPhotos = filteredPhotos.slice(startPhotoIndex, endPhotoIndex);
+
+  // --- Pagination Projets Digitaux ---
+  const totalDigitalPages = Math.ceil(
+    filteredDigitalProjects.length / ITEMS_PER_PAGE,
+  );
+  const startDigitalIndex = (currentDigitalPage - 1) * ITEMS_PER_PAGE;
+  const endDigitalIndex = startDigitalIndex + ITEMS_PER_PAGE;
+  const paginatedDigitalProjects = filteredDigitalProjects.slice(
+    startDigitalIndex,
+    endDigitalIndex,
+  );
 
   // --- Affichage Chargement ---
   if (loading) {
@@ -140,34 +197,34 @@ export default function Realisation() {
       {/* Filters */}
       <section className="border-b border-border bg-secondary/30 py-6">
         <div className="container mx-auto">
-            <Grid
-              container
-              display="flex"
-              flexWrap="wrap"
-              alignItems="center"
-              justifyContent="center"
-              gap={2}
-            >
-              {" "}
-              {categories.map((cat) => (
-                <button
-                  key={cat.id}
-                  onClick={() => setSelectedCategory(cat.id)}
-                  className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium transition-colors ${
-                    selectedCategory === cat.id
-                      ? cat.color === "primary"
-                        ? "bg-primary text-primary-foreground"
-                        : cat.color === "tertiary"
-                          ? "bg-tertiary text-white"
-                          : "bg-accent-warm text-white"
-                      : "bg-card text-muted-foreground hover:bg-accent-neutral"
-                  }`}
-                >
-                  <cat.icon className="h-4 w-4" />
-                  {cat.label}
-                </button>
-              ))}
-            </Grid>
+          <Grid
+            container
+            display="flex"
+            flexWrap="wrap"
+            alignItems="center"
+            justifyContent="center"
+            gap={2}
+          >
+            {" "}
+            {categories.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium transition-colors ${
+                  selectedCategory === cat.id
+                    ? cat.color === "primary"
+                      ? "bg-primary text-primary-foreground"
+                      : cat.color === "tertiary"
+                        ? "bg-tertiary text-white"
+                        : "bg-accent-warm text-white"
+                    : "bg-card text-muted-foreground hover:bg-accent-neutral"
+                }`}
+              >
+                <cat.icon className="h-4 w-4" />
+                {cat.label}
+              </button>
+            ))}
+          </Grid>
         </div>
       </section>
 

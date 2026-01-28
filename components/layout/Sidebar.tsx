@@ -17,6 +17,7 @@ import {
   Dashboard,
   Folder,
   Inventory2,
+  Sort,
   Web,
   WifiOff,
 } from "@mui/icons-material";
@@ -54,6 +55,7 @@ const SidebarContent: React.FC<SidebarContentProps> = ({ onNavigate, pathname })
     { text: "Dashboard", icon: <Dashboard />, path: "/" },
     { text: "Projets", icon: <Folder />, path: "/projets" },
     { text: "Matériels", icon: <Inventory2 />, path: "/materiels" },
+    { text: "Matériels Sortie", icon: <Sort />, path: "/sortie" },
     ...(isOffline
       ? [{ text: "Hors Ligne", icon: <WifiOff />, path: "/offline" }]
       : []),

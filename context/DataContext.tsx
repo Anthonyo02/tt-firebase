@@ -57,9 +57,21 @@ export interface Projet {
   commentaire: string;
 }
 
+// ✅ NOUVELLE INTERFACE CHECKLIST
+export interface CheckList {
+  id: string;
+  titre: string;
+  lieu: string;
+  lieu_link: string;
+  date_debut: string;
+  responsable: string[];
+  materiel: { id: string; nom: string; utiliser: number }[];
+  description: string;
+}
+
 export interface OfflineItem {
   id: string;
-  type: "projet" | "materiel" | "user";
+  type: "projet" | "materiel" | "user" | "checklist"; // ✅ Ajout "checklist"
   action: "create" | "update" | "delete";
   data: any;
   timestamp: number;
@@ -72,6 +84,7 @@ export interface OfflineItem {
 interface DataContextType {
   projets: Projet[];
   materiels: Materiel[];
+  checklists: CheckList[]; // ✅ NOUVEAU
   offlineQueue: OfflineItem[];
   users: User[];
   references: string[];
@@ -83,6 +96,7 @@ interface DataContextType {
   fetchProjets: () => Promise<void>;
   fetchMateriels: () => Promise<void>;
   fetchUsers: () => Promise<void>;
+  fetchChecklists: () => Promise<void>; // ✅ NOUVEAU
   addProjet: (projet: Omit<Projet, "id">) => Promise<void>;
   updateProjet: (id: string, projet: Partial<Projet>) => Promise<void>;
   deleteProjet: (id: string) => Promise<void>;
@@ -92,6 +106,9 @@ interface DataContextType {
   addUser: (user: Omit<User, "id">) => Promise<void>;
   updateUser: (id: string, user: Partial<User>) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
+  addChecklist: (checklist: Omit<CheckList, "id">) => Promise<void>; // ✅ NOUVEAU
+  updateChecklist: (id: string, checklist: Partial<CheckList>) => Promise<void>; // ✅ NOUVEAU
+  deleteChecklist: (id: string) => Promise<void>; // ✅ NOUVEAU
   addTeamMember: (name: string) => void;
   addReference: (ref: string) => void;
   syncOfflineData: () => Promise<void>;
@@ -108,6 +125,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [projets, setProjets] = useState<Projet[]>([]);
   const [materiels, setMateriels] = useState<Materiel[]>([]);
+  const [checklists, setChecklists] = useState<CheckList[]>([]); // ✅ NOUVEAU STATE
   const [users, setUsers] = useState<User[]>([]);
   const [offlineQueue, setOfflineQueue] = useState<OfflineItem[]>([]);
   const [references, setReferences] = useState<string[]>([]);
@@ -160,6 +178,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
       const [
         storedProjets,
         storedMateriels,
+        storedChecklists, // ✅ NOUVEAU
         storedUsers,
         storedRefs,
         storedCat,
@@ -168,6 +187,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
       ] = await Promise.all([
         storage.getItem<Projet[]>("projets"),
         storage.getItem<Materiel[]>("materiels"),
+        storage.getItem<CheckList[]>("checklists"), // ✅ NOUVEAU
         storage.getItem<User[]>("users"),
         storage.getItem<string[]>("references"),
         storage.getItem<string[]>("categorie"),
@@ -177,6 +197,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
 
       if (storedProjets) setProjets(storedProjets);
       if (storedMateriels) setMateriels(storedMateriels);
+      if (storedChecklists) setChecklists(storedChecklists); // ✅ NOUVEAU
       if (storedUsers) setUsers(storedUsers);
       if (storedRefs) setReferences(storedRefs);
       if (storedCat) setCategorie(storedCat);
@@ -190,6 +211,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
         setTimeout(() => {
           fetchProjets();
           fetchMateriels();
+          fetchChecklists(); // ✅ NOUVEAU
           fetchUsers();
         }, 1000);
       }
@@ -308,6 +330,36 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  // ✅ NOUVEAU: FETCH CHECKLISTS
+  const fetchChecklists = async () => {
+    if (!navigator.onLine) return;
+
+    try {
+      const snapshot = await getDocs(collection(db, "checklists"));
+      if (snapshot.empty && checklists.length > 0) return;
+
+      const formatted: CheckList[] = [];
+      snapshot.forEach((doc) => {
+        const c = doc.data();
+        formatted.push({
+          id: doc.id,
+          titre: c.titre || "",
+          lieu: c.lieu || "",
+          lieu_link: c.lieu_link || "",
+          date_debut: c.date_debut || "",
+          responsable: Array.isArray(c.responsable) ? c.responsable : [],
+          materiel: Array.isArray(c.materiel) ? c.materiel : [],
+          description: c.description || "",
+        });
+      });
+
+      setChecklists(formatted);
+      await saveToStorage("checklists", formatted);
+    } catch (err) {
+      console.error("fetchChecklists error:", err);
+    }
+  };
+
   // =======================
   // CRUD & OFFLINE QUEUE
   // =======================
@@ -318,6 +370,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     await saveToStorage("offlineQueue", newQueue);
   };
 
+  // --- USERS ---
   const addUser = async (user: Omit<User, "id">) => {
     const tempId = `temp_${Date.now()}`;
     const newUser = { ...user, id: tempId };
@@ -355,6 +408,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  // --- PROJETS ---
   const addProjet = async (projet: Omit<Projet, "id">) => {
     const tempId = `temp_${Date.now()}`;
     const newProjet = { ...projet, id: tempId };
@@ -391,6 +445,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  // --- MATERIELS ---
   const addMateriel = async (materiel: Omit<Materiel, "id">) => {
     const tempId = `temp_${Date.now()}`;
     const newMateriel = { ...materiel, id: tempId, quantites: Number(materiel.quantites) };
@@ -424,6 +479,43 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
       await deleteDoc(doc(db, "materiels", id));
     } catch {
       await addToOfflineQueue({ id, type: "materiel", action: "delete", data: null });
+    }
+  };
+
+  // ✅ NOUVEAU: CRUD CHECKLISTS
+  const addChecklist = async (checklist: Omit<CheckList, "id">) => {
+    const tempId = `temp_${Date.now()}`;
+    const newChecklist = { ...checklist, id: tempId };
+    setChecklists((prev) => [...prev, newChecklist]);
+    await saveToStorage("checklists", [...checklists, newChecklist]);
+
+    try {
+      await addDoc(collection(db, "checklists"), checklist);
+      if (navigator.onLine) await fetchChecklists();
+    } catch {
+      await addToOfflineQueue({ id: tempId, type: "checklist", action: "create", data: checklist });
+    }
+  };
+
+  const updateChecklist = async (id: string, checklist: Partial<CheckList>) => {
+    setChecklists((prev) => prev.map((c) => (c.id === id ? { ...c, ...checklist } : c)));
+    await saveToStorage("checklists", checklists);
+
+    try {
+      await updateDoc(doc(db, "checklists", id), checklist);
+    } catch {
+      await addToOfflineQueue({ id, type: "checklist", action: "update", data: checklist });
+    }
+  };
+
+  const deleteChecklist = async (id: string) => {
+    setChecklists((prev) => prev.filter((c) => c.id !== id));
+    await saveToStorage("checklists", checklists);
+
+    try {
+      await deleteDoc(doc(db, "checklists", id));
+    } catch {
+      await addToOfflineQueue({ id, type: "checklist", action: "delete", data: null });
     }
   };
 
@@ -471,6 +563,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
             else if (item.action === "update") await updateDoc(doc(db, "materiels", item.id), item.data);
             else if (item.action === "delete") await deleteDoc(doc(db, "materiels", item.id));
             break;
+          // ✅ NOUVEAU: SYNC CHECKLISTS
+          case "checklist":
+            if (item.action === "create") await addDoc(collection(db, "checklists"), item.data);
+            else if (item.action === "update") await updateDoc(doc(db, "checklists", item.id), item.data);
+            else if (item.action === "delete") await deleteDoc(doc(db, "checklists", item.id));
+            break;
         }
       } catch (err) {
         console.error("Sync offline item failed:", item, err);
@@ -481,6 +579,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     await saveToStorage("offlineQueue", []);
     await fetchProjets();
     await fetchMateriels();
+    await fetchChecklists(); // ✅ NOUVEAU
     await fetchUsers();
   };
 
@@ -492,6 +591,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
       value={{
         projets,
         materiels,
+        checklists, // ✅ NOUVEAU
         users,
         offlineQueue,
         references,
@@ -502,6 +602,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
         setIsLoad,
         fetchProjets,
         fetchMateriels,
+        fetchChecklists, // ✅ NOUVEAU
         fetchUsers,
         addProjet,
         updateProjet,
@@ -512,6 +613,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
         addUser,
         updateUser,
         deleteUser,
+        addChecklist, // ✅ NOUVEAU
+        updateChecklist, // ✅ NOUVEAU
+        deleteChecklist, // ✅ NOUVEAU
         addTeamMember,
         addReference,
         syncOfflineData,
