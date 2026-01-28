@@ -1,12 +1,18 @@
 // app/api/cloudinary/upload/route.ts
+export const runtime = "nodejs";
+
 import { v2 as cloudinary } from "cloudinary";
 import { NextRequest, NextResponse } from "next/server";
 
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME!,
+  api_key: process.env.CLOUDINARY_API_KEY!,
+  api_secret: process.env.CLOUDINARY_API_SECRET!,
 });
+
+export async function OPTIONS() {
+  return NextResponse.json({}, { status: 200 });
+}
 
 export async function POST(request: NextRequest): Promise<Response> {
   try {
@@ -15,41 +21,32 @@ export async function POST(request: NextRequest): Promise<Response> {
     const existingPublicId = formData.get("publicId") as string | null;
 
     if (!file) {
-      return NextResponse.json(
-        { error: "No file provided" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
     return new Promise<Response>((resolve) => {
-      const uploadOptions: Record<string, any> = {
+      const uploadOptions: any = {
         folder: "materiels",
         resource_type: "image",
         format: "webp",
         quality: "auto:good",
       };
 
-      // 🔄 OVERWRITE
       if (existingPublicId) {
-        const cleanPublicId = existingPublicId.replace("materiels/", "");
-        uploadOptions.public_id = cleanPublicId;
+        uploadOptions.public_id = existingPublicId.replace("materiels/", "");
         uploadOptions.overwrite = true;
         uploadOptions.invalidate = true;
       }
 
-      const uploadStream = cloudinary.uploader.upload_stream(
-        uploadOptions,
-        (error, result) => {
+      cloudinary.uploader
+        .upload_stream(uploadOptions, (error, result) => {
           if (error) {
-            console.error("❌ Cloudinary upload error:", error);
+            console.error("❌ Cloudinary error:", error);
             resolve(
-              NextResponse.json(
-                { error: error.message },
-                { status: 500 }
-              )
+              NextResponse.json({ error: error.message }, { status: 500 })
             );
           } else {
             resolve(
@@ -59,16 +56,11 @@ export async function POST(request: NextRequest): Promise<Response> {
               })
             );
           }
-        }
-      );
-
-      uploadStream.end(buffer);
+        })
+        .end(buffer);
     });
   } catch (error: any) {
-    console.error("❌ API upload error:", error);
-    return NextResponse.json(
-      { error: error.message },
-      { status: 500 }
-    );
+    console.error("❌ API error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
