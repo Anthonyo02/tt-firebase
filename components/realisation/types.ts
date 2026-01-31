@@ -69,6 +69,7 @@ export interface PhotoDialogState {
   open: boolean;
   mode: "add" | "edit";
   data: PhotoItem | null;
+    originalImages?: ImageItem[];
 }
 
 export interface DigitalProjectDialogState {

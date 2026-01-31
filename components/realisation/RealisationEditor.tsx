@@ -35,6 +35,7 @@ import {
   VideoDialogState,
   PhotoDialogState,
   DigitalProjectDialogState,
+  ImageItem,
 } from "./types";
 
 // Constants
@@ -364,10 +365,16 @@ export default function RealisationEditor() {
   };
 
   const handleEditPhoto = (photo: PhotoItem) => {
-    tempDialogImages.forEach((img) => URL.revokeObjectURL(img.previewUrl));
-    setTempDialogImages([]);
-    setPhotoDialog({ open: true, mode: "edit", data: { ...photo } });
-  };
+  tempDialogImages.forEach((img) => URL.revokeObjectURL(img.previewUrl));
+  setTempDialogImages([]);
+  
+  setPhotoDialog({ 
+    open: true, 
+    mode: "edit", 
+    data: { ...photo },
+    originalImages: [...photo.images], 
+  });
+}
 
   const handleClosePhotoDialog = () => {
     tempDialogImages.forEach((img) => URL.revokeObjectURL(img.previewUrl));
@@ -409,77 +416,141 @@ export default function RealisationEditor() {
     const newImages = photoDialog.data.images.filter((_, i) => i !== index);
     setPhotoDialog({ ...photoDialog, data: { ...photoDialog.data, images: newImages } });
   };
+// Dans RealisationEditor.tsx
 
-  const handleSavePhotoDialog = async () => {
-    if (!data || !photoDialog.data) return;
+const handleSavePhotoDialog = async () => {
+  if (!data || !photoDialog.data) return;
 
-    const photoId = photoDialog.data.id;
+  const photoId = photoDialog.data.id;
 
-    if (photoDialog.mode === "add") {
-      setData({ ...data, photos: [...data.photos, photoDialog.data] });
+  if (photoDialog.mode === "add") {
+    // ... Code existant pour le mode "add" (inchangé)
+    setData({ ...data, photos: [...data.photos, photoDialog.data] });
 
-      if (tempDialogImages.length > 0) {
-        const newPendingImages: PendingImage[] = tempDialogImages.map((temp, index) => ({
-          file: temp.file,
-          previewUrl: temp.previewUrl,
-          itemId: photoId,
-          type: "photo" as const,
-          imageIndex: photoDialog.data!.images.length - tempDialogImages.length + index,
-        }));
+    if (tempDialogImages.length > 0) {
+      const newPendingImages: PendingImage[] = tempDialogImages.map((temp, index) => ({
+        file: temp.file,
+        previewUrl: temp.previewUrl,
+        itemId: photoId,
+        type: "photo" as const,
+        imageIndex: photoDialog.data!.images.length - tempDialogImages.length + index,
+      }));
 
-        setPendingImages((prev) => [...prev, ...newPendingImages]);
-        setTempDialogImages([]);
-      } else {
-        setPendingNewPhotoIds((prev) => new Set([...prev, photoId]));
-      }
-
-      setToast({ msg: "Photo ajoutée - N'oubliez pas d'enregistrer", type: "info" });
+      setPendingImages((prev) => [...prev, ...newPendingImages]);
+      setTempDialogImages([]);
     } else {
-      setUpdatingItem(photoId);
-      try {
-        let updatedPhoto = { ...photoDialog.data };
-        const uploadedImages = [];
-
-        for (const img of updatedPhoto.images) {
-          const tempImg = tempDialogImages.find((t) => t.previewUrl === img.imageUrl);
-
-          if (tempImg) {
-            const compressedFile = await imageCompression(tempImg.file, COMPRESSION_OPTIONS);
-            const formData = new FormData();
-            formData.append("file", compressedFile);
-
-            const res = await fetch("/api/cloudinary/uploadweb/realisationimage", {
-              method: "POST",
-              body: formData,
-            });
-            const resData = await res.json();
-
-            if (!res.ok) throw new Error(resData.error || "Erreur upload");
-
-            uploadedImages.push({ imageUrl: resData.imageUrl, imagePublicId: resData.imagePublicId });
-            URL.revokeObjectURL(tempImg.previewUrl);
-          } else {
-            uploadedImages.push(img);
-          }
-        }
-
-        updatedPhoto.images = uploadedImages;
-        setTempDialogImages([]);
-
-        const updatedPhotos = data.photos.map((p) => (p.id === photoId ? updatedPhoto : p));
-        await updateDoc(doc(db, "website_content", "realisation_section"), { photos: updatedPhotos });
-
-        setData({ ...data, photos: updatedPhotos });
-        setToast({ msg: "Photo mise à jour !", type: "success" });
-      } catch (e: any) {
-        setToast({ msg: "Erreur de mise à jour", type: "error" });
-      } finally {
-        setUpdatingItem(null);
-      }
+      setPendingNewPhotoIds((prev) => new Set([...prev, photoId]));
     }
 
-    setPhotoDialog({ open: false, mode: "add", data: null });
-  };
+    setToast({ msg: "Photo ajoutée - N'oubliez pas d'enregistrer", type: "info" });
+  } else {
+    // ✅ MODE EDIT - Avec suppression des images retirées
+    setUpdatingItem(photoId);
+    
+    try {
+      let updatedPhoto = { ...photoDialog.data };
+      const uploadedImages: ImageItem[] = [];
+      const imagesToDelete: ImageItem[] = []; // ✅ Images à supprimer de Cloudinary
+
+      // ✅ ÉTAPE 1 : Identifier les images supprimées
+      const originalImages = photoDialog.originalImages || [];
+      const currentImageUrls = new Set(updatedPhoto.images.map(img => img.imageUrl));
+      
+      for (const originalImg of originalImages) {
+        // Si l'image originale n'est plus dans la liste actuelle, elle doit être supprimée
+        if (!currentImageUrls.has(originalImg.imageUrl) && originalImg.imagePublicId) {
+          imagesToDelete.push(originalImg);
+        }
+      }
+
+      // ✅ ÉTAPE 2 : Supprimer les images retirées de Cloudinary
+      for (const imgToDelete of imagesToDelete) {
+        try {
+          console.log(`🗑️ Suppression Cloudinary: ${imgToDelete.imagePublicId}`);
+          
+          const deleteRes = await fetch("/api/cloudinary/deleteweb", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ publicId: imgToDelete.imagePublicId }),
+          });
+
+          if (deleteRes.ok) {
+            console.log(`✅ Image supprimée: ${imgToDelete.imagePublicId}`);
+          } else {
+            console.warn(`⚠️ Échec suppression: ${imgToDelete.imagePublicId}`);
+          }
+        } catch (e) {
+          console.error(`❌ Erreur suppression Cloudinary:`, e);
+        }
+      }
+
+      // ✅ ÉTAPE 3 : Upload des nouvelles images et garder les existantes
+      for (const img of updatedPhoto.images) {
+        const tempImg = tempDialogImages.find((t) => t.previewUrl === img.imageUrl);
+
+        if (tempImg) {
+          // Nouvelle image à uploader
+          const compressedFile = await imageCompression(tempImg.file, COMPRESSION_OPTIONS);
+          const formData = new FormData();
+          formData.append("file", compressedFile);
+
+          const res = await fetch("/api/cloudinary/uploadweb/realisationimage", {
+            method: "POST",
+            body: formData,
+          });
+          const resData = await res.json();
+
+          if (!res.ok) throw new Error(resData.error || "Erreur upload");
+
+          uploadedImages.push({
+            imageUrl: resData.imageUrl,
+            imagePublicId: resData.imagePublicId,
+          });
+
+          URL.revokeObjectURL(tempImg.previewUrl);
+        } else {
+          // Image existante - garder telle quelle
+          uploadedImages.push(img);
+        }
+      }
+
+      updatedPhoto.images = uploadedImages;
+      setTempDialogImages([]);
+
+      // ✅ ÉTAPE 4 : Sauvegarder dans Firestore
+      const updatedPhotos = data.photos.map((p) => (p.id === photoId ? updatedPhoto : p));
+      
+      await updateDoc(doc(db, "website_content", "realisation_section"), { 
+        photos: updatedPhotos 
+      });
+
+      setData({ ...data, photos: updatedPhotos });
+      
+      // ✅ Message de confirmation avec détails
+      const deletedCount = imagesToDelete.length;
+      const addedCount = tempDialogImages.length;
+      
+      let message = "Photo mise à jour !";
+      if (deletedCount > 0 || addedCount > 0) {
+        const parts = [];
+        if (deletedCount > 0) parts.push(`${deletedCount} supprimée(s)`);
+        if (addedCount > 0) parts.push(`${addedCount} ajoutée(s)`);
+        message = `Photo mise à jour ! (${parts.join(", ")})`;
+      }
+      
+      setToast({ msg: message, type: "success" });
+      
+    } catch (e: any) {
+      console.error("❌ Erreur mise à jour photo:", e);
+      setToast({ msg: "Erreur de mise à jour", type: "error" });
+    } finally {
+      setUpdatingItem(null);
+    }
+  }
+
+  // Fermer le dialog
+  setPhotoDialog({ open: false, mode: "add", data: null, originalImages: [] });
+};
 
   const handleDeletePhoto = async (photoId: string) => {
     if (!data) return;

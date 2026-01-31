@@ -130,41 +130,6 @@ const DEFAULT_PARTENAIRES: PartenaireItem[] = [
     imagePublicId: "",
     order: 1,
   },
-  {
-    id: "p2",
-    name: "Partenaire Beta",
-    image: "/logos/partner-2.png",
-    imagePublicId: "",
-    order: 2,
-  },
-  {
-    id: "p3",
-    name: "Partenaire Gamma",
-    image: "/logos/partner-3.png",
-    imagePublicId: "",
-    order: 3,
-  },
-  {
-    id: "p4",
-    name: "Partenaire Delta",
-    image: "/logos/partner-4.png",
-    imagePublicId: "",
-    order: 4,
-  },
-  {
-    id: "p5",
-    name: "Partenaire Epsilon",
-    image: "/logos/partner-5.png",
-    imagePublicId: "",
-    order: 5,
-  },
-  {
-    id: "p6",
-    name: "Partenaire Zeta",
-    image: "/logos/partner-6.png",
-    imagePublicId: "",
-    order: 6,
-  },
 ];
 
 const DEFAULT_DATA: PartenaireData = {
@@ -203,44 +168,66 @@ export default function PartenaireEditor() {
   // ============================================
   // FIREBASE SYNC
   // ============================================
-  useEffect(() => {
-    const docRef = doc(db, "website_content", "partenaire_section");
+useEffect(() => {
+  const docRef = doc(db, "website_content", "partenaire_section");
 
-    const unsubscribe = onSnapshot(
-      docRef,
-      (snapshot) => {
-        if (snapshot.exists()) {
-          const docData = snapshot.data();
-          const partenaireData: PartenaireData = {
-            partenaires: Array.isArray(docData.partenaires)
-              ? docData.partenaires
-                  .map((p: any) => ({
-                    id: p.id || generateId(),
-                    name: p.name || "",
-                    image: p.image || "",
-                    imagePublicId: p.imagePublicId || "",
-                    order: p.order || 0,
-                  }))
-                  .sort((a: PartenaireItem, b: PartenaireItem) => a.order - b.order)
-              : DEFAULT_PARTENAIRES,
-          };
-          setData(partenaireData);
-        } else {
-          setDoc(docRef, DEFAULT_DATA);
-          setData(DEFAULT_DATA);
-        }
-        setLoading(false);
-      },
-      (error) => {
-        console.error("Erreur Firebase:", error);
-        setToast({ msg: "Erreur de connexion", type: "error" });
-        setData(DEFAULT_DATA);
-        setLoading(false);
+  const unsubscribe = onSnapshot(
+    docRef,
+    (snapshot) => {
+      // ⚠️ Hors connexion (cache Firestore)
+      if (snapshot.metadata.fromCache) {
+        setToast({
+          msg: "Mode hors connexion — données locales affichées",
+          type: "warning",
+        });
       }
-    );
 
-    return () => unsubscribe();
-  }, []);
+      if (snapshot.exists()) {
+        const docData = snapshot.data();
+
+        const partenaireData: PartenaireData = {
+          partenaires: Array.isArray(docData.partenaires)
+            ? docData.partenaires
+                .map((p: any) => ({
+                  id: p.id ?? generateId(),
+                  name: p.name ?? "",
+                  image: p.image ?? "",
+                  imagePublicId: p.imagePublicId ?? "",
+                  order: typeof p.order === "number" ? p.order : 0,
+                }))
+                .sort(
+                  (a: PartenaireItem, b: PartenaireItem) =>
+                    a.order - b.order
+                )
+            : DEFAULT_PARTENAIRES,
+        };
+
+        setData(partenaireData);
+      } else {
+        // ✅ IMPORTANT
+        // ❌ AUCUNE écriture Firestore ici
+        // ✅ Fallback LOCAL uniquement
+        setData(DEFAULT_DATA);
+      }
+
+      setLoading(false);
+    },
+    (error) => {
+      console.error("❌ Erreur Firebase :", error);
+      setToast({
+        msg: "Erreur de connexion à Firestore",
+        type: "error",
+      });
+
+      // fallback local, sans write
+      setData(DEFAULT_DATA);
+      setLoading(false);
+    }
+  );
+
+  return () => unsubscribe();
+}, []);
+
 
   // Cleanup des URLs blob
   useEffect(() => {
