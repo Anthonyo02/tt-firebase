@@ -46,6 +46,7 @@ import ValuesSection from "./ValuesSection";
 import ApproachSection from "./ApproachSection";
 import CtaSection from "./CtaSection";
 import { COMPRESSION_OPTIONS, DEFAULT_DATA } from "@/types/constants";
+import EditBannier from "../HeroImageEditor";
 
 interface EditAboutProps {
   onBack?: () => void;
@@ -55,7 +56,7 @@ const EditAbout: React.FC<EditAboutProps> = ({ onBack }) => {
   const theme = useTheme();
   const isSmall = useMediaQuery(theme.breakpoints.down("sm"));
   const [expanded, setExpanded] = useState<string | false>("panel0");
-
+  const [open, setOpen] = useState(true);
   // États
   const [formData, setFormData] = useState<PageContent | null>(null);
   const [loading, setLoading] = useState(true);
@@ -63,7 +64,8 @@ const EditAbout: React.FC<EditAboutProps> = ({ onBack }) => {
   const [uploading, setUploading] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
-  const [pendingHeroImage, setPendingHeroImage] = useState<PendingHeroImage | null>(null);
+  const [pendingHeroImage, setPendingHeroImage] =
+    useState<PendingHeroImage | null>(null);
 
   // Firebase Sync
   useEffect(() => {
@@ -85,7 +87,8 @@ const EditAbout: React.FC<EditAboutProps> = ({ onBack }) => {
             history: {
               subTitle: data.history?.subTitle || DEFAULT_DATA.history.subTitle,
               title: data.history?.title || DEFAULT_DATA.history.title,
-              description: data.history?.description || DEFAULT_DATA.history.description,
+              description:
+                data.history?.description || DEFAULT_DATA.history.description,
               color: data.history?.color || DEFAULT_DATA.history.color,
             },
             cards: Array.isArray(data.cards)
@@ -108,9 +111,11 @@ const EditAbout: React.FC<EditAboutProps> = ({ onBack }) => {
                 : DEFAULT_DATA.values.items,
             },
             approach: {
-              subTitle: data.approach?.subTitle || DEFAULT_DATA.approach.subTitle,
+              subTitle:
+                data.approach?.subTitle || DEFAULT_DATA.approach.subTitle,
               title: data.approach?.title || DEFAULT_DATA.approach.title,
-              description: data.approach?.description || DEFAULT_DATA.approach.description,
+              description:
+                data.approach?.description || DEFAULT_DATA.approach.description,
               color: data.approach?.color || DEFAULT_DATA.approach.color,
             },
             cta: {
@@ -138,7 +143,7 @@ const EditAbout: React.FC<EditAboutProps> = ({ onBack }) => {
         console.error("Erreur Firebase:", error);
         setToast({ msg: "Erreur de connexion", type: "error" });
         setLoading(false);
-      }
+      },
     );
 
     return () => unsubscribe();
@@ -200,7 +205,7 @@ const EditAbout: React.FC<EditAboutProps> = ({ onBack }) => {
   const handleSimpleSectionChange = (
     section: "history" | "approach" | "cta",
     field: string,
-    value: string
+    value: string,
   ) => {
     if (!formData) return;
     setFormData({
@@ -213,7 +218,7 @@ const EditAbout: React.FC<EditAboutProps> = ({ onBack }) => {
   const handleCardChange = (
     index: number,
     field: keyof CardItem,
-    value: string
+    value: string,
   ) => {
     if (!formData) return;
     const newCards = [...formData.cards];
@@ -250,7 +255,7 @@ const EditAbout: React.FC<EditAboutProps> = ({ onBack }) => {
   const handleValueItemChange = (
     index: number,
     field: keyof ValueItem,
-    value: string
+    value: string,
   ) => {
     if (!formData) return;
     const newItems = [...formData.values.items];
@@ -267,7 +272,10 @@ const EditAbout: React.FC<EditAboutProps> = ({ onBack }) => {
     const newItem: ValueItem = { title: "", description: "", color: "#616637" };
     setFormData({
       ...formData,
-      values: { ...formData.values, items: [...formData.values.items, newItem] },
+      values: {
+        ...formData.values,
+        items: [...formData.values.items, newItem],
+      },
     });
     setHasChanges(true);
   };
@@ -287,7 +295,7 @@ const EditAbout: React.FC<EditAboutProps> = ({ onBack }) => {
   const handleCtaButtonChange = (
     index: number,
     field: keyof CtaButton,
-    value: string
+    value: string,
   ) => {
     if (!formData) return;
     const newButtons = [...formData.cta.buttons];
@@ -304,7 +312,12 @@ const EditAbout: React.FC<EditAboutProps> = ({ onBack }) => {
         ...formData.cta,
         buttons: [
           ...formData.cta.buttons,
-          { label: "Action", href: "#", bgColor: "#616637", textColor: "#ffffff" },
+          {
+            label: "Action",
+            href: "#",
+            bgColor: "#616637",
+            textColor: "#ffffff",
+          },
         ],
       },
     });
@@ -336,7 +349,7 @@ const EditAbout: React.FC<EditAboutProps> = ({ onBack }) => {
         try {
           const compressedFile = await imageCompression(
             pendingHeroImage.file,
-            COMPRESSION_OPTIONS
+            COMPRESSION_OPTIONS,
           );
 
           const formDataUpload = new FormData();
@@ -367,7 +380,10 @@ const EditAbout: React.FC<EditAboutProps> = ({ onBack }) => {
           setPendingHeroImage(null);
         } catch (uploadError: any) {
           console.error("Erreur upload image hero:", uploadError);
-          setToast({ msg: "Erreur lors de l'upload de l'image", type: "error" });
+          setToast({
+            msg: "Erreur lors de l'upload de l'image",
+            type: "error",
+          });
           setSaving(false);
           setUploading(false);
           return;
@@ -399,7 +415,7 @@ const EditAbout: React.FC<EditAboutProps> = ({ onBack }) => {
     if (hasChanges) {
       if (
         window.confirm(
-          "Vous avez des modifications non sauvegardées. Voulez-vous vraiment quitter ?"
+          "Vous avez des modifications non sauvegardées. Voulez-vous vraiment quitter ?",
         )
       ) {
         if (pendingHeroImage) {
@@ -472,7 +488,13 @@ const EditAbout: React.FC<EditAboutProps> = ({ onBack }) => {
                 zIndex: 1,
               }}
             >
-              <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 1.5, sm: 2 } }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: { xs: 1.5, sm: 2 },
+                }}
+              >
                 {onBack && (
                   <Button
                     onClick={handleBack}
@@ -532,7 +554,9 @@ const EditAbout: React.FC<EditAboutProps> = ({ onBack }) => {
                     }
                     size="small"
                     sx={{
-                      bgcolor: pendingHeroImage ? "#ed6c02" : "rgba(255,255,255,0.2)",
+                      bgcolor: pendingHeroImage
+                        ? "#ed6c02"
+                        : "rgba(255,255,255,0.2)",
                       color: "#fff",
                       fontWeight: 600,
                       fontSize: { xs: "0.65rem", sm: "0.75rem" },
@@ -555,15 +579,10 @@ const EditAbout: React.FC<EditAboutProps> = ({ onBack }) => {
             }}
           >
             <Box sx={{ bgcolor: "#f8fafc" }}>
-              <HeroImageSection
-                formData={formData}
-                pendingHeroImage={pendingHeroImage}
-                expanded={expanded}
-                isSmall={isSmall}
-                onChangePanel={handleChangePanel}
-                onHeroImageSelect={handleHeroImageSelect}
-                onHeroImageChange={handleHeroImageChange}
-                onCancelPendingHeroImage={handleCancelPendingHeroImage}
+              <EditBannier
+                open={open}
+                onClose={() => setOpen(false)}
+                url="bannier_apropos"
               />
 
               <HistorySection
