@@ -272,7 +272,7 @@ export default function RealisationEditor() {
         title: "",
         description: "",
         videoUrl: "",
-        client: "",
+        client: "autre",
         date: new Date().toISOString().split("T")[0],
       },
     });
@@ -357,7 +357,7 @@ export default function RealisationEditor() {
         description: "",
         driveLink: "",
         images: [],
-        client: "",
+        client: "autre",
         date: new Date().toISOString().split("T")[0],
       },
     });
@@ -547,7 +547,7 @@ export default function RealisationEditor() {
         projectUrl: "",
         image: "",
         imagePublicId: "",
-        client: "",
+        client: "autre",
         date: new Date().toISOString().split("T")[0],
         technologies: [],
       },

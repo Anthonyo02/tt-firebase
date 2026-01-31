@@ -118,41 +118,59 @@ export default function ContactEditor() {
   // ============================================
   // FIREBASE SYNC
   // ============================================
-  useEffect(() => {
-    const docRef = doc(db, "website_content", "contact_section");
+ useEffect(() => {
+  const docRef = doc(db, "website_content", "contact_section");
 
-    const unsubscribe = onSnapshot(
-      docRef,
-      (snapshot) => {
-        if (snapshot.exists()) {
-          const docData = snapshot.data() as ContactData;
-          const contactData: ContactData = {
-            titre: docData.titre || DEFAULT_DATA.titre,
-            sousTitre: docData.sousTitre || DEFAULT_DATA.sousTitre,
-            email: docData.email || DEFAULT_DATA.email,
-            telephone: docData.telephone || DEFAULT_DATA.telephone,
-            adresse: docData.adresse || DEFAULT_DATA.adresse,
-            googleMapLink: docData.googleMapLink || DEFAULT_DATA.googleMapLink, // ✅
-            horaires: docData.horaires || DEFAULT_DATA.horaires,
-          };
-          setData(contactData);
-          setOriginalData(contactData);
-        } else {
-          setDoc(docRef, DEFAULT_DATA);
-          setData(DEFAULT_DATA);
-          setOriginalData(DEFAULT_DATA);
-        }
-        setLoading(false);
-      },
-      (error) => {
-        console.error("Erreur Firebase:", error);
-        setToast({ msg: "Erreur de connexion", type: "error" });
-        setLoading(false);
-      },
-    );
+  const unsubscribe = onSnapshot(
+    docRef,
+    (snapshot) => {
+      // ⚠️ Mode hors connexion (cache)
+      if (snapshot.metadata.fromCache) {
+        setToast({
+          msg: "Mode hors connexion — données locales affichées",
+          type: "warning",
+        });
+      }
 
-    return () => unsubscribe();
-  }, []);
+      if (snapshot.exists()) {
+        const docData = snapshot.data() as Partial<ContactData>;
+
+        const contactData: ContactData = {
+          titre: docData.titre ?? DEFAULT_DATA.titre,
+          sousTitre: docData.sousTitre ?? DEFAULT_DATA.sousTitre,
+          email: docData.email ?? DEFAULT_DATA.email,
+          telephone: docData.telephone ?? DEFAULT_DATA.telephone,
+          adresse: docData.adresse ?? DEFAULT_DATA.adresse,
+          googleMapLink:
+            docData.googleMapLink ?? DEFAULT_DATA.googleMapLink,
+          horaires: docData.horaires ?? DEFAULT_DATA.horaires,
+        };
+
+        setData(contactData);
+        setOriginalData(contactData);
+      } else {
+        // ⚠️ IMPORTANT
+        // ❌ NE PAS écrire dans Firestore ici
+        // ✅ Valeurs par défaut UNIQUEMENT en local
+        setData(DEFAULT_DATA);
+        setOriginalData(DEFAULT_DATA);
+      }
+
+      setLoading(false);
+    },
+    (error) => {
+      console.error("❌ Erreur Firebase :", error);
+      setToast({
+        msg: "Erreur de connexion à Firestore",
+        type: "error",
+      });
+      setLoading(false);
+    }
+  );
+
+  return () => unsubscribe();
+}, []);
+
 
   // Détecter les changements
   useEffect(() => {

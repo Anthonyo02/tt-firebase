@@ -28,7 +28,7 @@ export async function POST(req: Request) {
 
     if (existingPublicId) {
       // ✅ CORRECTION: Ne PAS mettre folder car publicId contient déjà le chemin complet
-      // Ex: existingPublicId = "website_about/abc123" 
+      // Ex: existingPublicId = "bannier_service/abc123" 
       // On l'utilise tel quel sans rajouter folder
       uploadOptions.public_id = existingPublicId;
       uploadOptions.overwrite = true;
@@ -37,9 +37,9 @@ export async function POST(req: Request) {
       console.log("🔄 Overwrite image:", existingPublicId);
     } else {
       // ✅ Nouvelle image seulement: on spécifie le folder
-      uploadOptions.folder = "website_about";
+      uploadOptions.folder = "bannier_service";
       
-      console.log("📤 Nouvelle image dans folder: website_about");
+      console.log("📤 Nouvelle image dans folder: bannier_service");
     }
 
     const result = await new Promise<any>((resolve, reject) => {

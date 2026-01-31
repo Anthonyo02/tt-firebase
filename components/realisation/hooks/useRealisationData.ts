@@ -2,43 +2,58 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { doc, onSnapshot, updateDoc, setDoc } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, setDoc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 import { RealisationData, ImageItem } from "../types";
 import { DEFAULT_DATA } from "../constants";
 
-/**
- * Hook pour gérer la section "Réalisation"
- * - Synchronisation temps réel avec Firestore
- * - Données par défaut auto-créées si le document n'existe pas
- */
 export function useRealisationData() {
   const [data, setData] = useState<RealisationData>(DEFAULT_DATA);
   const [loading, setLoading] = useState(true);
+  const [isOffline, setIsOffline] = useState(false); // 👈 Optionnel: pour afficher un indicateur
 
   useEffect(() => {
     const docRef = doc(db, "website_content", "realisation_section");
 
+    // ✅ ÉTAPE 1: Initialisation séparée (une seule fois au démarrage)
+    const initializeDocument = async () => {
+      try {
+        const docSnap = await getDoc(docRef);
+        if (!docSnap.exists()) {
+          console.log("📌 Document n'existe pas, création...");
+          await setDoc(docRef, DEFAULT_DATA);
+        }
+      } catch (error) {
+        // Probablement hors ligne, on ignore
+        console.warn("⚠️ Impossible de vérifier/créer le document:", error);
+      }
+    };
+
+    initializeDocument();
+
+    // ✅ ÉTAPE 2: Listener qui N'ÉCRIT JAMAIS
     const unsubscribe = onSnapshot(
       docRef,
-      async (snapshot) => {
+      { includeMetadataChanges: true }, // 👈 Important pour détecter le cache
+      (snapshot) => {
+        const metadata = snapshot.metadata;
+        
+        // Mise à jour de l'état offline
+        setIsOffline(metadata.fromCache && !metadata.hasPendingWrites);
+
         if (snapshot.exists()) {
           const docData = snapshot.data();
 
           const realisationData: RealisationData = {
             videos: Array.isArray(docData.videos)
               ? docData.videos.map((v: any) => ({
-                  id: v.id, // ⚠️ l'id DOIT déjà exister dans Firestore
+                  id: v.id,
                   title: v.title || "",
                   description: v.description || "",
-                  
                   videoUrl: v.videoUrl || "",
                   client: v.client || "",
-                  date:
-                    v.date ||
-                    v.year ||
-                    new Date().toISOString().split("T")[0],
+                  date: v.date || v.year || new Date().toISOString().split("T")[0],
                 }))
               : DEFAULT_DATA.videos,
 
@@ -61,44 +76,45 @@ export function useRealisationData() {
                   }
 
                   return {
-                    id: p.id, // ⚠️ id existant
+                    id: p.id,
                     title: p.title || "",
                     description: p.description || "",
                     driveLink: p.driveLink || "",
                     images,
                     client: p.client || "",
-                    date:
-                      p.date ||
-                      p.year ||
-                      new Date().toISOString().split("T")[0],
+                    date: p.date || p.year || new Date().toISOString().split("T")[0],
                   };
                 })
               : DEFAULT_DATA.photos,
 
             digitalProjects: Array.isArray(docData.digitalProjects)
               ? docData.digitalProjects.map((dp: any) => ({
-                  id: dp.id, // ⚠️ id existant
+                  id: dp.id,
                   title: dp.title || "",
                   client: dp.client || "",
-                  date:
-                    dp.date ||
-                    new Date().toISOString().split("T")[0],
+                  date: dp.date || new Date().toISOString().split("T")[0],
                   description: dp.description || "",
                   image: dp.image || "",
                   imagePublicId: dp.imagePublicId || "",
                   projectUrl: dp.projectUrl || "",
-                  technologies: Array.isArray(dp.technologies)
-                    ? dp.technologies
-                    : [],
+                  technologies: Array.isArray(dp.technologies) ? dp.technologies : [],
                 }))
               : DEFAULT_DATA.digitalProjects,
           };
 
           setData(realisationData);
         } else {
-          // 📌 Création automatique du document s'il n'existe pas
-          await setDoc(docRef, DEFAULT_DATA);
-          setData(DEFAULT_DATA);
+          // ✅ NE PLUS FAIRE setDoc ICI !
+          // Si le document n'existe pas ET qu'on est en ligne,
+          // l'initialisation ci-dessus s'en chargera
+          
+          if (metadata.fromCache) {
+            console.log("📴 Hors ligne - données depuis le cache");
+            // Garder les données actuelles, ne rien écraser
+          } else {
+            console.log("⚠️ Document n'existe pas (sera créé à l'initialisation)");
+            // L'initialisation async s'en charge
+          }
         }
 
         setLoading(false);
@@ -106,6 +122,7 @@ export function useRealisationData() {
       (error) => {
         console.error("🔥 Erreur Firebase (realisation):", error);
         setLoading(false);
+        // ❌ NE PAS écraser les données en cas d'erreur !
       }
     );
 
@@ -125,8 +142,9 @@ export function useRealisationData() {
 
   return {
     data,
-    setData, // utile pour l'UI locale (drag & drop, preview…)
+    setData,
     loading,
     updateData,
+    isOffline, // 👈 Optionnel: pour afficher un indicateur dans l'UI
   };
 }

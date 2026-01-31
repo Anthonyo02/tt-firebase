@@ -61,6 +61,7 @@ const HeroImageSection: React.FC<HeroImageSectionProps> = ({
         "&.Mui-expanded": {
           bgcolor: safeAlpha(config.color, 0.02),
         },
+        mb:2
       }}
     >
       <AccordionSummary

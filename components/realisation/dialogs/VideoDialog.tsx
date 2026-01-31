@@ -74,7 +74,8 @@ export default function VideoDialog({
     >
       <DialogTitle
         sx={{
-          background: THEME.youtube.gradient,
+          background:
+            "linear-gradient(135deg, #818660 0%, #9ba17b 50%, #6b7052 100%)",
           color: "white",
           display: "flex",
           alignItems: "center",
@@ -83,6 +84,28 @@ export default function VideoDialog({
           px: { xs: 2, sm: 3 },
         }}
       >
+        <Box
+          sx={{
+            position: "absolute",
+            width: 300,
+            height: 300,
+            borderRadius: "50%",
+            bgcolor: "rgba(255,255,255,0.1)",
+            top: -100,
+            right: -50,
+          }}
+        />
+        <Box
+          sx={{
+            position: "absolute",
+            width: 150,
+            height: 150,
+            borderRadius: "50%",
+            bgcolor: "rgba(255,255,255,0.08)",
+            bottom: -30,
+            left: "30%",
+          }}
+        />
         <Stack direction="row" spacing={1.5} alignItems="center">
           <YouTubeIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
           <Typography
@@ -204,8 +227,9 @@ export default function VideoDialog({
           />
 
           {/* Client et Date */}
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}>
+          <Grid container justifyContent={'space-between'} rowSpacing={{ xs: 2, sm: 0 }}
+>
+            <Grid item xs={12} sm={5}>
               <TextField
                 select
                 label="Client"

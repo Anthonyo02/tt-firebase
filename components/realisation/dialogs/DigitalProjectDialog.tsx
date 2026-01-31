@@ -30,10 +30,240 @@ import {
   Devices as DevicesIcon,
 } from "@mui/icons-material";
 
-import { DigitalProjectItem, DigitalProjectDialogState, TempDialogImage } from "../types";
+import {
+  DigitalProjectItem,
+  DigitalProjectDialogState,
+  TempDialogImage,
+} from "../types";
 import { THEME, CLIENT_OPTIONS, TECHNOLOGY_OPTIONS } from "../constants";
 import { isValidProjectUrl } from "../utils";
+const styles = {
+  dialog: (isSmall: boolean) => ({
+    borderRadius: isSmall ? 0 : 3,
+    overflow: "hidden",
+    m: isSmall ? 0 : 2,
+    boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+  }),
 
+  header: {
+    wrapper: {
+      background:
+        "linear-gradient(135deg, #818660 0%, #9ba17b 50%, #6b7052 100%)",
+      position: "relative",
+      overflow: "hidden",
+      color: "white",
+      py: { xs: 1.5, sm: 2 },
+      px: { xs: 2, sm: 3 },
+      mb: 1,
+    },
+    decorativeCircle: {
+      position: "absolute",
+      width: 200,
+      height: 200,
+      borderRadius: "50%",
+      background: alpha("#fff", 0.1),
+      top: -80,
+      right: -40,
+    },
+    content: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      position: "relative",
+      zIndex: 1,
+    },
+    iconWrapper: {
+      width: 36,
+      height: 36,
+      borderRadius: 2,
+      bgcolor: alpha("#fff", 0.2),
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      mr: 1.5,
+    },
+    closeButton: {
+      color: "white",
+      bgcolor: alpha("#fff", 0.15),
+      "&:hover": { bgcolor: alpha("#fff", 0.25) },
+    },
+  },
+
+  content: {
+    wrapper: {
+      p: { xs: 2, sm: 2.5 },
+    },
+    sectionTitle: {
+      fontWeight: 600,
+      mb: 1.5,
+      fontSize: "0.85rem",
+      color: THEME.neutral[700],
+      display: "flex",
+      alignItems: "center",
+      gap: 0.75,
+    },
+  },
+
+  uploadButton: (disabled: boolean) => ({
+    mb: 1.5,
+    py: 1.5,
+    borderRadius: 2,
+    textTransform: "none",
+    fontWeight: 600,
+    fontSize: "0.8rem",
+    borderColor: disabled
+      ? THEME.neutral[300]
+      : alpha(THEME.secondary.main, 0.4),
+    borderStyle: "dashed",
+    color: disabled ? THEME.neutral[400] : THEME.secondary.main,
+    bgcolor: disabled ? THEME.neutral[100] : "transparent",
+    cursor: disabled ? "not-allowed" : "pointer",
+    "&:hover": disabled
+      ? {}
+      : {
+          bgcolor: alpha(THEME.secondary.main, 0.08),
+          borderColor: THEME.secondary.main,
+        },
+  }),
+
+  imageGrid: {
+    wrapper: {
+      display: "grid",
+      gridTemplateColumns: {
+        xs: "repeat(3, 1fr)",
+        sm: "repeat(4, 1fr)",
+        md: "repeat(5, 1fr)",
+      },
+      gap: 1,
+      maxHeight: { xs: 200, sm: 180, md: 160 },
+      overflowY: "auto",
+      p: 1,
+      bgcolor: THEME.neutral[50],
+      borderRadius: 2,
+      border: `1px solid ${THEME.neutral[200]}`,
+      "&::-webkit-scrollbar": { width: 4 },
+      "&::-webkit-scrollbar-thumb": {
+        bgcolor: THEME.neutral[300],
+        borderRadius: 2,
+      },
+    },
+  },
+
+  imageCard: (isTemp: boolean) => ({
+    wrapper: {
+      position: "relative",
+      aspectRatio: "1",
+      borderRadius: 1.5,
+      overflow: "hidden",
+      border: isTemp
+        ? `2px solid ${THEME.accent.orange}`
+        : `1px solid ${THEME.neutral[200]}`,
+      cursor: "pointer",
+      transition: "all 0.2s ease",
+      "&:hover": {
+        transform: "scale(1.03)",
+        boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+        "& .delete-btn": { opacity: 1 },
+      },
+    },
+    image: {
+      width: "100%",
+      height: "100%",
+      objectFit: "cover",
+    },
+    newBadge: {
+      position: "absolute",
+      top: 2,
+      left: 2,
+      bgcolor: THEME.accent.orange,
+      color: "white",
+      fontSize: "0.5rem",
+      fontWeight: 700,
+      height: 16,
+      borderRadius: 0.75,
+      "& .MuiChip-label": { px: 0.5 },
+    },
+    indexBadge: {
+      position: "absolute",
+      bottom: 2,
+      left: 2,
+      bgcolor: alpha("#000", 0.7),
+      color: "white",
+      px: 0.75,
+      py: 0.25,
+      borderRadius: 0.75,
+      fontSize: "0.6rem",
+      fontWeight: 600,
+    },
+    deleteButton: {
+      position: "absolute",
+      top: 2,
+      right: 2,
+      bgcolor: alpha("#EF4444", 0.9),
+      color: "white",
+      width: 20,
+      height: 20,
+      opacity: 0,
+      transition: "opacity 0.2s",
+      "&:hover": { bgcolor: "#DC2626" },
+    },
+  }),
+
+  placeholder: {
+    gridColumn: { xs: "span 3", sm: "span 4", md: "span 5" },
+    py: 3,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    bgcolor: THEME.neutral[100],
+    borderRadius: 2,
+    border: `2px dashed ${THEME.neutral[300]}`,
+    gap: 0.5,
+  },
+
+  limitBadge: (isAtLimit: boolean) => ({
+    ml: 1,
+    height: 20,
+    fontSize: "0.7rem",
+    fontWeight: 600,
+    bgcolor: isAtLimit
+      ? alpha("#EF4444", 0.1)
+      : alpha(THEME.secondary.main, 0.1),
+    color: isAtLimit ? "#EF4444" : THEME.secondary.main,
+    border: `1px solid ${isAtLimit ? "#EF4444" : THEME.secondary.main}`,
+  }),
+
+  formField: {
+    "& .MuiOutlinedInput-root": { borderRadius: 2 },
+    "& .MuiInputBase-input": { fontSize: "0.9rem" },
+  },
+
+  actions: {
+    wrapper: {
+      p: { xs: 1.5, sm: 2 },
+      borderTop: `1px solid ${THEME.neutral[200]}`,
+      flexDirection: { xs: "column", sm: "row" },
+      gap: 1,
+    },
+    cancelButton: {
+      textTransform: "none",
+      color: THEME.neutral[600],
+      px: 3,
+      order: { xs: 2, sm: 1 },
+    },
+    submitButton: {
+      background: THEME.secondary.gradient,
+      textTransform: "none",
+      fontWeight: 600,
+      px: 4,
+      borderRadius: 2,
+      color: "white",
+      order: { xs: 1, sm: 2 },
+      "&:disabled": { background: THEME.neutral[300] },
+    },
+  },
+};
 interface DigitalProjectDialogProps {
   dialogState: DigitalProjectDialogState;
   tempImage: TempDialogImage | null;
@@ -88,7 +318,8 @@ export default function DigitalProjectDialog({
     >
       <DialogTitle
         sx={{
-          background: THEME.digital.gradient,
+          background:
+            "linear-gradient(135deg, #818660 0%, #9ba17b 50%, #6b7052 100%)",
           color: "white",
           display: "flex",
           alignItems: "center",
@@ -97,6 +328,28 @@ export default function DigitalProjectDialog({
           px: { xs: 2, sm: 3 },
         }}
       >
+        <Box
+          sx={{
+            position: "absolute",
+            width: 300,
+            height: 300,
+            borderRadius: "50%",
+            bgcolor: "rgba(255,255,255,0.1)",
+            top: -100,
+            right: -50,
+          }}
+        />
+        <Box
+          sx={{
+            position: "absolute",
+            width: 150,
+            height: 150,
+            borderRadius: "50%",
+            bgcolor: "rgba(255,255,255,0.08)",
+            bottom: -30,
+            left: "30%",
+          }}
+        />
         <Stack direction="row" spacing={1.5} alignItems="center">
           <WebIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
           <Typography
@@ -176,7 +429,10 @@ export default function DigitalProjectDialog({
                   sx={{ height: "100%", gap: 1 }}
                 >
                   <DevicesIcon
-                    sx={{ fontSize: { xs: 36, sm: 48 }, color: THEME.neutral[400] }}
+                    sx={{
+                      fontSize: { xs: 36, sm: 48 },
+                      color: THEME.neutral[400],
+                    }}
                   />
                   <Typography
                     variant="body2"
@@ -213,13 +469,25 @@ export default function DigitalProjectDialog({
                 hidden
                 accept="image/*"
                 type="file"
-                onChange={(e) => e.target.files?.[0] && onImageSelect(e.target.files[0])}
+                onChange={(e) =>
+                  e.target.files?.[0] && onImageSelect(e.target.files[0])
+                }
               />
             </Button>
           </Grid>
 
           {/* Form */}
           <Grid item xs={12} md={7}>
+            <Typography
+              variant="subtitle2"
+              sx={{
+                fontWeight: 600,
+                mb: 1.5,
+                fontSize: { xs: "0.875rem", sm: "1rem" },
+              }}
+            >
+             Informations
+            </Typography>
             <Stack spacing={{ xs: 2, sm: 3 }}>
               {/* URL du projet */}
               <TextField
@@ -227,14 +495,18 @@ export default function DigitalProjectDialog({
                 fullWidth
                 size={isSmall ? "small" : "medium"}
                 value={data.projectUrl}
-                onChange={(e) => handleFieldChange("projectUrl", e.target.value)}
+                onChange={(e) =>
+                  handleFieldChange("projectUrl", e.target.value)
+                }
                 placeholder="https://www.exemple.com"
                 helperText={
                   data.projectUrl && !isValidProjectUrl(data.projectUrl)
                     ? "⚠️ URL invalide"
                     : "Lien vers le site ou l'application"
                 }
-                error={data.projectUrl !== "" && !isValidProjectUrl(data.projectUrl)}
+                error={
+                  data.projectUrl !== "" && !isValidProjectUrl(data.projectUrl)
+                }
                 InputProps={{
                   startAdornment: (
                     <LinkIcon
@@ -267,7 +539,9 @@ export default function DigitalProjectDialog({
                 multiline
                 rows={isSmall ? 2 : 3}
                 value={data.description}
-                onChange={(e) => handleFieldChange("description", e.target.value)}
+                onChange={(e) =>
+                  handleFieldChange("description", e.target.value)
+                }
                 sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
               />
 
@@ -305,7 +579,9 @@ export default function DigitalProjectDialog({
                         onClick={() => handleTechnologyToggle(tech.value)}
                         sx={{
                           cursor: "pointer",
-                          bgcolor: isSelected ? alpha(tech.color, 0.2) : "white",
+                          bgcolor: isSelected
+                            ? alpha(tech.color, 0.2)
+                            : "white",
                           color: isSelected ? tech.color : THEME.neutral[600],
                           border: `1px solid ${isSelected ? tech.color : THEME.neutral[300]}`,
                           fontWeight: isSelected ? 600 : 400,
@@ -341,7 +617,9 @@ export default function DigitalProjectDialog({
                     fullWidth
                     size={isSmall ? "small" : "medium"}
                     value={data.client}
-                    onChange={(e) => handleFieldChange("client", e.target.value)}
+                    onChange={(e) =>
+                      handleFieldChange("client", e.target.value)
+                    }
                     sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
                   >
                     {CLIENT_OPTIONS.map((client) => (
@@ -355,7 +633,9 @@ export default function DigitalProjectDialog({
                               bgcolor: client.color,
                             }}
                           />
-                          <span style={{ fontSize: isSmall ? "0.875rem" : "1rem" }}>
+                          <span
+                            style={{ fontSize: isSmall ? "0.875rem" : "1rem" }}
+                          >
                             {client.label}
                           </span>
                         </Stack>
@@ -416,16 +696,8 @@ export default function DigitalProjectDialog({
           variant="contained"
           onClick={onSave}
           fullWidth={isSmall}
-          disabled={!data.title || isUpdating}
-          sx={{
-            background: THEME.digital.gradient,
-            textTransform: "none",
-            fontWeight: 600,
-            px: 4,
-            borderRadius: 2,
-            color: "white",
-            order: { xs: 1, sm: 2 },
-          }}
+          disabled={!data.title || isUpdating || !data.projectUrl || !isValidProjectUrl(data.projectUrl)}
+          sx={styles.actions.submitButton}
         >
           {isUpdating ? (
             <CircularProgress size={20} sx={{ color: "white" }} />

@@ -272,11 +272,11 @@ export default function ProjetsEditor() {
 
   // Images en attente
   const [pendingImages, setPendingImages] = useState<Map<string, PendingImage>>(
-    new Map()
+    new Map(),
   );
 
   // ============================================
-  // FIREBASE SYNC - LOGOS (modifié: partenaires → logo)
+  // FIREBASE SYNC - LOGOS (celui-ci est OK, mais on ajoute la détection offline)
   // ============================================
 
   useEffect(() => {
@@ -284,46 +284,79 @@ export default function ProjetsEditor() {
 
     const unsubscribe = onSnapshot(
       docRef,
+      { includeMetadataChanges: true },
       (snapshot) => {
         if (snapshot.exists()) {
           const docData = snapshot.data() as LogoData;
-          // ✅ Changé: partenaires → logo
-          const sortedLogos = (docData.logos || [])
+          const sortedLogos = docData.logos || [];
           setLogos(sortedLogos);
         } else {
-          setLogos([]);
+          // ✅ OK - pas de setDoc ici, c'est bien
+          if (!snapshot.metadata.fromCache) {
+            setLogos([]);
+          }
         }
         setLogosLoading(false);
       },
       (error) => {
         console.error("Erreur Firebase logos:", error);
         setLogosLoading(false);
-      }
+      },
     );
 
     return () => unsubscribe();
   }, []);
 
   // ============================================
-  // FIREBASE SYNC - PROJETS (modifié avec introduction)
+  // FIREBASE SYNC - PROJETS (CORRIGÉ)
   // ============================================
 
   useEffect(() => {
     const docRef = doc(db2, "website_content", "projets");
 
+    // ✅ ÉTAPE 1: Initialisation séparée (une seule fois)
+    const initializeDocument = async () => {
+      try {
+        const { getDoc } = await import("firebase/firestore");
+        const docSnap = await getDoc(docRef);
+        if (!docSnap.exists()) {
+          console.log("📌 Document projets n'existe pas, création...");
+          await setDoc(docRef, DEFAULT_PROJETS_DATA);
+        }
+      } catch (error) {
+        console.warn(
+          "⚠️ Impossible de vérifier/créer le document projets:",
+          error,
+        );
+      }
+    };
+
+    initializeDocument();
+
+    // ✅ ÉTAPE 2: Listener qui N'ÉCRIT JAMAIS
     const unsubscribe = onSnapshot(
       docRef,
+      { includeMetadataChanges: true },
       (snapshot) => {
+        const metadata = snapshot.metadata;
+
         if (snapshot.exists()) {
           const docData = snapshot.data() as ProjetsData;
-          // ✅ Ajout de introduction
           setData({
             introduction: docData.introduction || "",
             projets: docData.projets || [],
           });
         } else {
-          setDoc(docRef, DEFAULT_PROJETS_DATA);
-          setData(DEFAULT_PROJETS_DATA);
+          // ❌ NE PLUS FAIRE setDoc ICI !
+          if (metadata.fromCache) {
+            console.log("📴 Hors ligne - données projets depuis le cache");
+            // Garder les données actuelles, ne rien faire
+          } else {
+            console.log(
+              "⚠️ Document projets n'existe pas (sera créé à l'initialisation)",
+            );
+            // L'initialisation async s'en charge
+          }
         }
         setLoading(false);
       },
@@ -331,7 +364,8 @@ export default function ProjetsEditor() {
         console.error("Erreur Firebase:", error);
         setToast({ msg: "Erreur de connexion", type: "error" });
         setLoading(false);
-      }
+        // ❌ NE PAS écraser les données en cas d'erreur !
+      },
     );
 
     return () => unsubscribe();
@@ -413,7 +447,7 @@ export default function ProjetsEditor() {
       projets: data.projets.map((box) =>
         box.id === boxId
           ? { ...box, ...updates, updatedAt: getTimestamp() }
-          : box
+          : box,
       ),
     });
   };
@@ -450,7 +484,7 @@ export default function ProjetsEditor() {
     if (!box) return;
 
     const newLabels = box.labels.map((label) =>
-      label.id === labelId ? { ...label, text } : label
+      label.id === labelId ? { ...label, text } : label,
     );
 
     updateBox(boxId, { labels: newLabels });
@@ -487,14 +521,14 @@ export default function ProjetsEditor() {
   const updateListGroupTitle = (
     boxId: string,
     groupId: string,
-    title: string
+    title: string,
   ) => {
     if (!data) return;
     const box = data.projets.find((b) => b.id === boxId);
     if (!box) return;
 
     const newGroups = box.listGroups.map((group) =>
-      group.id === groupId ? { ...group, title } : group
+      group.id === groupId ? { ...group, title } : group,
     );
 
     updateBox(boxId, { listGroups: newGroups });
@@ -519,7 +553,7 @@ export default function ProjetsEditor() {
     const newGroups = box.listGroups.map((group) =>
       group.id === groupId
         ? { ...group, items: [...group.items, newItem] }
-        : group
+        : group,
     );
 
     updateBox(boxId, { listGroups: newGroups });
@@ -529,7 +563,7 @@ export default function ProjetsEditor() {
     boxId: string,
     groupId: string,
     itemId: string,
-    text: string
+    text: string,
   ) => {
     if (!data) return;
     const box = data.projets.find((b) => b.id === boxId);
@@ -540,10 +574,10 @@ export default function ProjetsEditor() {
         ? {
             ...group,
             items: group.items.map((item) =>
-              item.id === itemId ? { ...item, text } : item
+              item.id === itemId ? { ...item, text } : item,
             ),
           }
-        : group
+        : group,
     );
 
     updateBox(boxId, { listGroups: newGroups });
@@ -557,7 +591,7 @@ export default function ProjetsEditor() {
     const newGroups = box.listGroups.map((group) =>
       group.id === groupId
         ? { ...group, items: group.items.filter((item) => item.id !== itemId) }
-        : group
+        : group,
     );
 
     updateBox(boxId, { listGroups: newGroups });
@@ -619,7 +653,7 @@ export default function ProjetsEditor() {
         try {
           const compressedFile = await imageCompression(
             pending.file,
-            COMPRESSION_OPTIONS
+            COMPRESSION_OPTIONS,
           );
 
           const formData = new FormData();
@@ -649,7 +683,7 @@ export default function ProjetsEditor() {
                     imageId: resData.imagePublicId || resData.publicId || "",
                   },
                 }
-              : b
+              : b,
           );
 
           URL.revokeObjectURL(pending.previewUrl);
@@ -1375,7 +1409,7 @@ export default function ProjetsEditor() {
                               updateListGroupTitle(
                                 box.id,
                                 group.id,
-                                e.target.value
+                                e.target.value,
                               )
                             }
                           />
@@ -1428,7 +1462,7 @@ export default function ProjetsEditor() {
                                     box.id,
                                     group.id,
                                     item.id,
-                                    e.target.value
+                                    e.target.value,
                                   )
                                 }
                               />
@@ -1577,7 +1611,7 @@ export default function ProjetsEditor() {
                 {...compactStyles.button}
                 startIcon={
                   saving ? (
-                    <CircularProgress size={14}  />
+                    <CircularProgress size={14} />
                   ) : (
                     <SaveIcon sx={{ fontSize: 16 }} />
                   )
@@ -1587,7 +1621,7 @@ export default function ProjetsEditor() {
                 sx={{
                   ...compactStyles.button.sx,
                   bgcolor: hasPendingChanges ? "#ed6c02" : "white",
-                  color: hasPendingChanges ?THEME_COLORS.olive  :"white" ,
+                  color: hasPendingChanges ? THEME_COLORS.olive : "white",
                   "&:hover": {
                     bgcolor: hasPendingChanges ? "#e65100" : "#f5f5f5",
                   },

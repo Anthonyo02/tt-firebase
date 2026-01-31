@@ -187,41 +187,72 @@ export default function LogoEditor() {
   // ============================================
   // FIREBASE SYNC
   // ============================================
-  useEffect(() => {
-    const docRef = doc(db, "website_content", "logo");
+// ============================================
+// FIREBASE SYNC (CORRIGÉ)
+// ============================================
+useEffect(() => {
+  const docRef = doc(db, "website_content", "logo");
 
-    const unsubscribe = onSnapshot(
-      docRef,
-      (snapshot) => {
-        if (snapshot.exists()) {
-          const docData = snapshot.data();
-          const logoData: LogoData = {
-            logos: Array.isArray(docData.logos)
-              ? docData.logos.map((l: any) => ({
-                  id: l.id || generateId(),
-                  name: l.name || "",
-                  image: l.image || "",
-                  imagePublicId: l.imagePublicId || "",
-                }))
-              : DEFAULT_LOGOS,
-          };
-          setData(logoData);
-        } else {
-          setDoc(docRef, DEFAULT_DATA);
-          setData(DEFAULT_DATA);
-        }
-        setLoading(false);
-      },
-      (error) => {
-        console.error("Erreur Firebase:", error);
-        setToast({ msg: "Erreur de connexion", type: "error" });
-        setData(DEFAULT_DATA);
-        setLoading(false);
+  // ✅ ÉTAPE 1: Initialisation séparée (une seule fois)
+  const initializeDocument = async () => {
+    try {
+      const { getDoc } = await import("firebase/firestore");
+      const docSnap = await getDoc(docRef);
+      if (!docSnap.exists()) {
+        console.log("📌 Document logo n'existe pas, création...");
+        await setDoc(docRef, DEFAULT_DATA);
       }
-    );
+    } catch (error) {
+      console.warn("⚠️ Impossible de vérifier/créer le document logo:", error);
+    }
+  };
 
-    return () => unsubscribe();
-  }, []);
+  initializeDocument();
+
+  // ✅ ÉTAPE 2: Listener qui N'ÉCRIT JAMAIS
+  const unsubscribe = onSnapshot(
+    docRef,
+    { includeMetadataChanges: true },
+    (snapshot) => {
+      const metadata = snapshot.metadata;
+
+      if (snapshot.exists()) {
+        const docData = snapshot.data();
+        const logoData: LogoData = {
+          logos: Array.isArray(docData.logos)
+            ? docData.logos.map((l: any) => ({
+                id: l.id || generateId(),
+                name: l.name || "",
+                image: l.image || "",
+                imagePublicId: l.imagePublicId || "",
+              }))
+            : [],  // ✅ Tableau vide au lieu de DEFAULT_LOGOS
+        };
+        setData(logoData);
+      } else {
+        // ❌ NE PLUS FAIRE setDoc ICI !
+        if (metadata.fromCache) {
+          console.log("📴 Hors ligne - données logo depuis le cache");
+          // Garder les données actuelles, ne rien faire
+        } else {
+          console.log("⚠️ Document logo n'existe pas (sera créé à l'initialisation)");
+          // On peut mettre un état vide si on veut
+          // Mais NE PAS faire setDoc !
+        }
+      }
+      setLoading(false);
+    },
+    (error) => {
+      console.error("Erreur Firebase:", error);
+      setToast({ msg: "Erreur de connexion", type: "error" });
+      // ❌ NE PAS écraser les données en cas d'erreur !
+      // setData(DEFAULT_DATA);  ← SUPPRIMER CETTE LIGNE
+      setLoading(false);
+    }
+  );
+
+  return () => unsubscribe();
+}, []);
 
   // Cleanup des URLs blob
   useEffect(() => {

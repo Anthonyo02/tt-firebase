@@ -338,30 +338,46 @@ export default function ServicesEditor() {
   // FIREBASE SYNC
   // ============================================
 
-  useEffect(() => {
-    const docRef = doc(db2, "website_content", "services");
+useEffect(() => {
+  const docRef = doc(db2, "website_content", "services");
 
-    const unsubscribe = onSnapshot(
-      docRef,
-      (snapshot) => {
-        if (snapshot.exists()) {
-          const docData = snapshot.data() as ServicesData;
-          setData({ services: docData.services || [] });
-        } else {
-          setDoc(docRef, DEFAULT_SERVICES_DATA);
-          setData(DEFAULT_SERVICES_DATA);
-        }
-        setLoading(false);
-      },
-      (error) => {
-        console.error("Erreur Firebase:", error);
-        setToast({ msg: "Erreur de connexion", type: "error" });
-        setLoading(false);
-      },
-    );
+  // D'abord vérifier si le document existe
+  const initializeData = async () => {
+    try {
+      const { getDoc } = await import("firebase/firestore");
+      const docSnap = await getDoc(docRef);
+      
+      if (!docSnap.exists()) {
+        // Créer seulement une fois au démarrage
+        await setDoc(docRef, DEFAULT_SERVICES_DATA);
+      }
+    } catch (error) {
+      console.error("Erreur initialisation:", error);
+    }
+  };
 
-    return () => unsubscribe();
-  }, []);
+  initializeData();
+
+  // Ensuite écouter les changements
+  const unsubscribe = onSnapshot(
+    docRef,
+    (snapshot) => {
+      if (snapshot.exists()) {
+        const docData = snapshot.data() as ServicesData;
+        setData({ services: docData.services || [] });
+      }
+      // NE PLUS faire de setDoc ici!
+      setLoading(false);
+    },
+    (error) => {
+      console.error("Erreur Firebase:", error);
+      setToast({ msg: "Erreur de connexion", type: "error" });
+      setLoading(false);
+    }
+  );
+
+  return () => unsubscribe();
+}, []);
 
   useEffect(() => {
     return () => {
@@ -656,7 +672,6 @@ export default function ServicesEditor() {
     return (
       <>
         {" "}
-        
         <Accordion
           key={box.id}
           expanded={isExpanded}
@@ -1447,7 +1462,7 @@ export default function ServicesEditor() {
               />
             </Tabs>
           </Grid>
-          
+
           <Grid item xs={12} md={6} sx={{ textAlign: "right", py: 0.5 }}>
             <Stack
               direction="row"
@@ -1498,7 +1513,6 @@ export default function ServicesEditor() {
             </Stack>
           </Grid>
         </Grid>
-       
       </Box>
 
       {/* VUE APERÇU */}
@@ -1747,7 +1761,6 @@ export default function ServicesEditor() {
 
       {/* VUE ÉDITEUR */}
       {tabValue === 1 && (
-        
         <Box
           sx={{
             bgcolor: "#f8f8f8",
@@ -1756,7 +1769,11 @@ export default function ServicesEditor() {
             overflowY: "auto",
           }}
         >
-           <EditBannier open={open} onClose={() => setOpen(false)} url="bannier_service"/>
+          <EditBannier
+            open={open}
+            onClose={() => setOpen(false)}
+            url="bannier_service"
+          />
           <Stack direction="row" justifyContent="flex-end" sx={{ mb: 1.5 }}>
             <Button
               variant="contained"

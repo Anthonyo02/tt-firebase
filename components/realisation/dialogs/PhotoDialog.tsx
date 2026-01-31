@@ -154,12 +154,14 @@ const styles = {
 
   header: {
     wrapper: {
-      background: `linear-gradient(135deg, ${THEME.secondary.main} 0%, ${THEME.secondary.dark} 100%)`,
+      background:
+        "linear-gradient(135deg, #818660 0%, #9ba17b 50%, #6b7052 100%)",
       position: "relative",
       overflow: "hidden",
       color: "white",
       py: { xs: 1.5, sm: 2 },
       px: { xs: 2, sm: 3 },
+      mb: 1,
     },
     decorativeCircle: {
       position: "absolute",
@@ -517,7 +519,7 @@ export default function PhotoDialog({
     <Dialog
       open={open}
       onClose={onClose}
-      maxWidth="lg"
+      maxWidth="md"
       fullWidth
       fullScreen={isSmall}
       TransitionComponent={Fade}
@@ -525,7 +527,28 @@ export default function PhotoDialog({
     >
       {/* ==================== HEADER ==================== */}
       <DialogTitle sx={styles.header.wrapper}>
-        <Box sx={styles.header.decorativeCircle} />
+        <Box
+          sx={{
+            position: "absolute",
+            width: 300,
+            height: 300,
+            borderRadius: "50%",
+            bgcolor: "rgba(255,255,255,0.1)",
+            top: -100,
+            right: -50,
+          }}
+        />
+        <Box
+          sx={{
+            position: "absolute",
+            width: 150,
+            height: 150,
+            borderRadius: "50%",
+            bgcolor: "rgba(255,255,255,0.08)",
+            bottom: -30,
+            left: "30%",
+          }}
+        />
         <Box sx={styles.header.content}>
           <Stack direction="row" alignItems="center">
             <Box sx={styles.header.iconWrapper}>
@@ -717,8 +740,9 @@ export default function PhotoDialog({
                 sx={styles.formField}
               />
 
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
+              <Grid container justifyContent={'space-between'} rowSpacing={{ xs: 2, sm: 0 }}
+>
+                <Grid item xs={12} sm={5}>
                   <TextField
                     select
                     label="Client"

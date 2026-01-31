@@ -40,7 +40,6 @@ import {
   Block,
 } from "@mui/icons-material";
 
-import { useAuth } from "../context/AuthContext";
 import { useData, Projet } from "../context/DataContext";
 
 import ProjetFormModal from "../components/modals/ProjetFormModal";

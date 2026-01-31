@@ -119,8 +119,8 @@ export const SECTIONS_CONFIG: SectionConfig[] = [
     icon: <ImageIcon />,
     title: "Image Hero",
     sub: "Image principale, titre et sous-titre",
-    color: "#8b5cf6",
-    gradient: "linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%)",
+    color: "#818660",
+    gradient:"linear-gradient(135deg, #818660 0%, #9ba17b 50%, #6b7052 100%)",
   },
   {
     id: "panel1",
@@ -159,7 +159,7 @@ export const SECTIONS_CONFIG: SectionConfig[] = [
     icon: <TouchAppIcon />,
     title: "Appel à l'action",
     sub: "Boutons et liens de bas de page",
-    color: "#3b82f6",
-    gradient: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
+    color: "#818660",
+    gradient: "linear-gradient(135deg, #818660 0%, #42471f 100%)",
   },
 ];
