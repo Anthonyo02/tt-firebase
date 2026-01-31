@@ -1,5 +1,5 @@
 // ============================================
-// EDIT ABOUT MODAL - Modal principal d'édition
+// EDIT ABOUT PAGE - Page principale d'édition
 // ============================================
 
 "use client";
@@ -10,11 +10,7 @@ import {
   Typography,
   Button,
   Stack,
-  IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
+  Paper,
   Chip,
   useTheme,
   useMediaQuery,
@@ -22,15 +18,16 @@ import {
   Snackbar,
   Alert,
   CircularProgress,
+  Container,
 } from "@mui/material";
 
 import { doc, onSnapshot, updateDoc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
-import CloseIcon from "@mui/icons-material/Close";
 import EditNoteIcon from "@mui/icons-material/EditNote";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 
 import {
   PageContent,
@@ -39,7 +36,6 @@ import {
   CardItem,
   ValueItem,
   CtaButton,
-  EditAboutModalProps,
   ToastState,
 } from "../../types/types";
 
@@ -51,9 +47,12 @@ import ApproachSection from "./ApproachSection";
 import CtaSection from "./CtaSection";
 import { COMPRESSION_OPTIONS, DEFAULT_DATA } from "@/types/constants";
 
-const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
+interface EditAboutProps {
+  onBack?: () => void;
+}
+
+const EditAbout: React.FC<EditAboutProps> = ({ onBack }) => {
   const theme = useTheme();
-  const fullScreen = useMediaQuery(theme.breakpoints.down("md"));
   const isSmall = useMediaQuery(theme.breakpoints.down("sm"));
   const [expanded, setExpanded] = useState<string | false>("panel0");
 
@@ -68,8 +67,6 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
 
   // Firebase Sync
   useEffect(() => {
-    if (!open) return;
-
     const docRef = doc(db, "website_content", "full_about");
 
     const unsubscribe = onSnapshot(
@@ -145,7 +142,7 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
     );
 
     return () => unsubscribe();
-  }, [open]);
+  }, []);
 
   // Cleanup des blob URLs
   useEffect(() => {
@@ -398,70 +395,60 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
     }
   };
 
-  const handleClose = () => {
+  const handleBack = () => {
     if (hasChanges) {
       if (
         window.confirm(
-          "Vous avez des modifications non sauvegardées. Voulez-vous vraiment fermer ?"
+          "Vous avez des modifications non sauvegardées. Voulez-vous vraiment quitter ?"
         )
       ) {
         if (pendingHeroImage) {
           URL.revokeObjectURL(pendingHeroImage.previewUrl);
           setPendingHeroImage(null);
         }
-        onClose();
+        onBack?.();
       }
     } else {
-      onClose();
+      onBack?.();
     }
   };
 
   // Loading state
   if (loading || !formData) {
     return (
-      <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
-        <DialogContent
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            minHeight: 300,
-          }}
-        >
-          <Stack alignItems="center" spacing={2}>
-            <CircularProgress sx={{ color: "#616637" }} />
-            <Typography>Chargement...</Typography>
-          </Stack>
-        </DialogContent>
-      </Dialog>
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "100vh",
+          bgcolor: "#f8fafc",
+        }}
+      >
+        <Stack alignItems="center" spacing={2}>
+          <CircularProgress sx={{ color: "#616637" }} />
+          <Typography>Chargement...</Typography>
+        </Stack>
+      </Box>
     );
   }
 
   return (
     <>
-      <Dialog
-        open={open}
-        onClose={handleClose}
-        fullWidth
-        maxWidth="md"
-        fullScreen={fullScreen}
-        PaperProps={{
-          sx: {
-            borderRadius: fullScreen ? 0 : 4,
-            overflow: "hidden",
-            boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
-          },
-        }}
-      >
+      <Box sx={{ minHeight: "100vh", bgcolor: "#f8fafc" }}>
         {/* --- HEADER --- */}
-        <DialogTitle
+        <Paper
+          elevation={0}
           sx={{
             background:
               "linear-gradient(135deg, #818660 0%, #cdd1b3ff 50%, #6b7052 100%)",
             color: "#fff",
             py: { xs: 2, sm: 3 },
             px: { xs: 2, sm: 3 },
-            position: "relative",
+            position: "sticky",
+            top: 0,
+            zIndex: 1100,
+            borderRadius: 0,
             overflow: "hidden",
             "&::before": {
               content: '""',
@@ -475,230 +462,259 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
             },
           }}
         >
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              position: "relative",
-              zIndex: 1,
-            }}
-          >
-            <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 1.5, sm: 2 } }}>
-              <Avatar
-                sx={{
-                  width: { xs: 40, sm: 50 },
-                  height: { xs: 40, sm: 50 },
-                  bgcolor: "rgba(255,255,255,0.2)",
-                  backdropFilter: "blur(10px)",
-                }}
-              >
-                <EditNoteIcon sx={{ fontSize: { xs: 24, sm: 32 } }} />
-              </Avatar>
-              <Box>
-                <Typography
-                  variant="h5"
-                  fontWeight={800}
-                  sx={{ fontSize: { xs: "1.1rem", sm: "1.5rem" } }}
-                >
-                  Éditer "À Propos"
-                </Typography>
-                <Typography
-                  variant="body2"
+          <Container maxWidth="lg">
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                position: "relative",
+                zIndex: 1,
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 1.5, sm: 2 } }}>
+                {onBack && (
+                  <Button
+                    onClick={handleBack}
+                    startIcon={<ArrowBackIcon />}
+                    sx={{
+                      color: "#fff",
+                      mr: 1,
+                      "&:hover": { bgcolor: "rgba(255,255,255,0.1)" },
+                    }}
+                    size={isSmall ? "small" : "medium"}
+                  >
+                    {!isSmall && "Retour"}
+                  </Button>
+                )}
+                <Avatar
                   sx={{
-                    opacity: 0.9,
-                    mt: 0.5,
-                    fontSize: { xs: "0.75rem", sm: "0.875rem" },
-                    display: { xs: "none", sm: "block" },
+                    width: { xs: 40, sm: 50 },
+                    height: { xs: 40, sm: 50 },
+                    bgcolor: "rgba(255,255,255,0.2)",
+                    backdropFilter: "blur(10px)",
                   }}
                 >
-                  Personnalisez le contenu de votre page
-                </Typography>
+                  <EditNoteIcon sx={{ fontSize: { xs: 24, sm: 32 } }} />
+                </Avatar>
+                <Box>
+                  <Typography
+                    variant="h5"
+                    fontWeight={800}
+                    sx={{ fontSize: { xs: "1.1rem", sm: "1.5rem" } }}
+                  >
+                    Éditer "À Propos"
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      opacity: 0.9,
+                      mt: 0.5,
+                      fontSize: { xs: "0.75rem", sm: "0.875rem" },
+                      display: { xs: "none", sm: "block" },
+                    }}
+                  >
+                    Personnalisez le contenu de votre page
+                  </Typography>
+                </Box>
               </Box>
+              <Stack direction="row" spacing={1} alignItems="center">
+                {(hasChanges || pendingHeroImage) && (
+                  <Chip
+                    label={
+                      isSmall
+                        ? pendingHeroImage
+                          ? "📷"
+                          : "!"
+                        : pendingHeroImage
+                          ? "Image en attente"
+                          : "Non sauvegardé"
+                    }
+                    size="small"
+                    sx={{
+                      bgcolor: pendingHeroImage ? "#ed6c02" : "rgba(255,255,255,0.2)",
+                      color: "#fff",
+                      fontWeight: 600,
+                      fontSize: { xs: "0.65rem", sm: "0.75rem" },
+                    }}
+                  />
+                )}
+              </Stack>
             </Box>
-            <Stack direction="row" spacing={1} alignItems="center">
-              {(hasChanges || pendingHeroImage) && (
-                <Chip
-                  label={
-                    isSmall
-                      ? pendingHeroImage
-                        ? "📷"
-                        : "!"
-                      : pendingHeroImage
-                        ? "Image en attente"
-                        : "Non sauvegardé"
-                  }
-                  size="small"
-                  sx={{
-                    bgcolor: pendingHeroImage ? "#ed6c02" : "rgba(255,255,255,0.2)",
-                    color: "#fff",
-                    fontWeight: 600,
-                    fontSize: { xs: "0.65rem", sm: "0.75rem" },
-                  }}
-                />
-              )}
-              <IconButton
-                onClick={handleClose}
-                sx={{
-                  color: "#fff",
-                  bgcolor: "rgba(255,255,255,0.15)",
-                  "&:hover": { bgcolor: "rgba(255,255,255,0.25)" },
-                }}
-                size={isSmall ? "small" : "medium"}
-              >
-                <CloseIcon />
-              </IconButton>
-            </Stack>
-          </Box>
-        </DialogTitle>
+          </Container>
+        </Paper>
 
         {/* --- CONTENT --- */}
-        <DialogContent sx={{ p: 0, bgcolor: "#f8fafc" }}>
-          <HeroImageSection
-            formData={formData}
-            pendingHeroImage={pendingHeroImage}
-            expanded={expanded}
-            isSmall={isSmall}
-            onChangePanel={handleChangePanel}
-            onHeroImageSelect={handleHeroImageSelect}
-            onHeroImageChange={handleHeroImageChange}
-            onCancelPendingHeroImage={handleCancelPendingHeroImage}
-          />
+        <Container maxWidth="lg" sx={{ py: { xs: 2, sm: 3 } }}>
+          <Paper
+            elevation={0}
+            sx={{
+              borderRadius: 4,
+              overflow: "hidden",
+              boxShadow: "0 4px 20px rgba(0, 0, 0, 0.08)",
+            }}
+          >
+            <Box sx={{ bgcolor: "#f8fafc" }}>
+              <HeroImageSection
+                formData={formData}
+                pendingHeroImage={pendingHeroImage}
+                expanded={expanded}
+                isSmall={isSmall}
+                onChangePanel={handleChangePanel}
+                onHeroImageSelect={handleHeroImageSelect}
+                onHeroImageChange={handleHeroImageChange}
+                onCancelPendingHeroImage={handleCancelPendingHeroImage}
+              />
 
-          <HistorySection
-            formData={formData}
-            expanded={expanded}
-            isSmall={isSmall}
-            onChangePanel={handleChangePanel}
-            onSectionChange={handleSimpleSectionChange}
-          />
+              <HistorySection
+                formData={formData}
+                expanded={expanded}
+                isSmall={isSmall}
+                onChangePanel={handleChangePanel}
+                onSectionChange={handleSimpleSectionChange}
+              />
 
-          <CardsSection
-            formData={formData}
-            expanded={expanded}
-            isSmall={isSmall}
-            onChangePanel={handleChangePanel}
-            onCardChange={handleCardChange}
-            onAddCard={handleAddCard}
-            onRemoveCard={handleRemoveCard}
-          />
+              <CardsSection
+                formData={formData}
+                expanded={expanded}
+                isSmall={isSmall}
+                onChangePanel={handleChangePanel}
+                onCardChange={handleCardChange}
+                onAddCard={handleAddCard}
+                onRemoveCard={handleRemoveCard}
+              />
 
-          <ValuesSection
-            formData={formData}
-            expanded={expanded}
-            isSmall={isSmall}
-            onChangePanel={handleChangePanel}
-            onValuesHeaderChange={handleValuesHeaderChange}
-            onValueItemChange={handleValueItemChange}
-            onAddValueItem={handleAddValueItem}
-            onRemoveValueItem={handleRemoveValueItem}
-          />
+              <ValuesSection
+                formData={formData}
+                expanded={expanded}
+                isSmall={isSmall}
+                onChangePanel={handleChangePanel}
+                onValuesHeaderChange={handleValuesHeaderChange}
+                onValueItemChange={handleValueItemChange}
+                onAddValueItem={handleAddValueItem}
+                onRemoveValueItem={handleRemoveValueItem}
+              />
 
-          <ApproachSection
-            formData={formData}
-            expanded={expanded}
-            isSmall={isSmall}
-            onChangePanel={handleChangePanel}
-            onSectionChange={handleSimpleSectionChange}
-          />
+              <ApproachSection
+                formData={formData}
+                expanded={expanded}
+                isSmall={isSmall}
+                onChangePanel={handleChangePanel}
+                onSectionChange={handleSimpleSectionChange}
+              />
 
-          <CtaSection
-            formData={formData}
-            expanded={expanded}
-            isSmall={isSmall}
-            onChangePanel={handleChangePanel}
-            onCtaHeaderChange={handleSimpleSectionChange}
-            onCtaButtonChange={handleCtaButtonChange}
-            onAddCtaButton={handleAddCtaButton}
-            onRemoveCtaButton={handleRemoveCtaButton}
-          />
-        </DialogContent>
+              <CtaSection
+                formData={formData}
+                expanded={expanded}
+                isSmall={isSmall}
+                onChangePanel={handleChangePanel}
+                onCtaHeaderChange={handleSimpleSectionChange}
+                onCtaButtonChange={handleCtaButtonChange}
+                onAddCtaButton={handleAddCtaButton}
+                onRemoveCtaButton={handleRemoveCtaButton}
+              />
+            </Box>
+          </Paper>
+        </Container>
 
-        {/* --- FOOTER --- */}
-        <DialogActions
+        {/* --- FOOTER STICKY --- */}
+        <Paper
+          elevation={8}
           sx={{
+            position: "sticky",
+            bottom: 0,
             p: { xs: 1.5, sm: 2.5 },
             bgcolor: "#fff",
             borderTop: "1px solid #e2e8f0",
-            gap: { xs: 1, sm: 1.5 },
-            flexDirection: { xs: "column", sm: "row" },
+            borderRadius: 0,
+            zIndex: 1100,
           }}
         >
-          <Button
-            onClick={handleClose}
-            variant="outlined"
-            fullWidth={isSmall}
-            size={isSmall ? "small" : "medium"}
-            sx={{
-              borderRadius: 2,
-              textTransform: "none",
-              fontWeight: 600,
-              px: { xs: 2, sm: 3 },
-              order: { xs: 2, sm: 1 },
-              borderColor: "#e2e8f0",
-              color: "#64748b",
-              "&:hover": { bgcolor: "#f8fafc", borderColor: "#cbd5e1" },
-            }}
-          >
-            Annuler
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            variant="contained"
-            fullWidth={isSmall}
-            size={isSmall ? "small" : "medium"}
-            disabled={saving || (!hasChanges && !pendingHeroImage)}
-            startIcon={
-              saving ? (
-                <CircularProgress size={16} sx={{ color: "white" }} />
-              ) : pendingHeroImage ? (
-                <CloudUploadIcon />
-              ) : (
-                <CheckCircleIcon />
-              )
-            }
-            sx={{
-              borderRadius: 2,
-              textTransform: "none",
-              fontWeight: 600,
-              px: { xs: 2, sm: 4 },
-              order: { xs: 1, sm: 2 },
-              background:
-                hasChanges || pendingHeroImage
-                  ? pendingHeroImage
-                    ? "linear-gradient(135deg, #ed6c02 0%, #ff9800 100%)"
-                    : "linear-gradient(135deg, #818660 0%, rgb(168, 171, 149) 50%, #989e7a 100%)"
-                  : "#9ca3af",
-              boxShadow:
-                hasChanges || pendingHeroImage
-                  ? pendingHeroImage
-                    ? "0 4px 14px rgba(237, 108, 2, 0.4)"
-                    : "0 4px 14px rgba(99, 102, 241, 0.4)"
-                  : "none",
-              "&:hover": {
-                boxShadow:
-                  hasChanges || pendingHeroImage
-                    ? pendingHeroImage
-                      ? "0 6px 20px rgba(237, 108, 2, 0.5)"
-                      : "0 6px 20px rgba(99, 102, 241, 0.5)"
-                    : "none",
-              },
-              "&:disabled": {
-                background: "#d1d5db",
-                color: "#9ca3af",
-              },
-            }}
-          >
-            {saving
-              ? uploading
-                ? "Upload en cours..."
-                : "Sauvegarde..."
-              : pendingHeroImage
-                ? "Enregistrer (1 image à uploader)"
-                : "Sauvegarder"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+          <Container maxWidth="lg">
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={{ xs: 1, sm: 1.5 }}
+              justifyContent="flex-end"
+            >
+              {onBack && (
+                <Button
+                  onClick={handleBack}
+                  variant="outlined"
+                  fullWidth={isSmall}
+                  size={isSmall ? "small" : "medium"}
+                  sx={{
+                    borderRadius: 2,
+                    textTransform: "none",
+                    fontWeight: 600,
+                    px: { xs: 2, sm: 3 },
+                    order: { xs: 2, sm: 1 },
+                    borderColor: "#e2e8f0",
+                    color: "#64748b",
+                    "&:hover": { bgcolor: "#f8fafc", borderColor: "#cbd5e1" },
+                  }}
+                >
+                  Annuler
+                </Button>
+              )}
+              <Button
+                onClick={handleSubmit}
+                variant="contained"
+                fullWidth={isSmall}
+                size={isSmall ? "small" : "medium"}
+                disabled={saving || (!hasChanges && !pendingHeroImage)}
+                startIcon={
+                  saving ? (
+                    <CircularProgress size={16} sx={{ color: "white" }} />
+                  ) : pendingHeroImage ? (
+                    <CloudUploadIcon />
+                  ) : (
+                    <CheckCircleIcon />
+                  )
+                }
+                sx={{
+                  borderRadius: 2,
+                  textTransform: "none",
+                  fontWeight: 600,
+                  px: { xs: 2, sm: 4 },
+                  order: { xs: 1, sm: 2 },
+                  background:
+                    hasChanges || pendingHeroImage
+                      ? pendingHeroImage
+                        ? "linear-gradient(135deg, #ed6c02 0%, #ff9800 100%)"
+                        : "linear-gradient(135deg, #818660 0%, rgb(168, 171, 149) 50%, #989e7a 100%)"
+                      : "#9ca3af",
+                  boxShadow:
+                    hasChanges || pendingHeroImage
+                      ? pendingHeroImage
+                        ? "0 4px 14px rgba(237, 108, 2, 0.4)"
+                        : "0 4px 14px rgba(99, 102, 241, 0.4)"
+                      : "none",
+                  "&:hover": {
+                    boxShadow:
+                      hasChanges || pendingHeroImage
+                        ? pendingHeroImage
+                          ? "0 6px 20px rgba(237, 108, 2, 0.5)"
+                          : "0 6px 20px rgba(99, 102, 241, 0.5)"
+                        : "none",
+                  },
+                  "&:disabled": {
+                    background: "#d1d5db",
+                    color: "#9ca3af",
+                  },
+                }}
+              >
+                {saving
+                  ? uploading
+                    ? "Upload en cours..."
+                    : "Sauvegarde..."
+                  : pendingHeroImage
+                    ? "Enregistrer (1 image à uploader)"
+                    : "Sauvegarder"}
+              </Button>
+            </Stack>
+          </Container>
+        </Paper>
+      </Box>
 
       {/* --- TOAST --- */}
       <Snackbar
@@ -725,4 +741,4 @@ const EditAboutModal: React.FC<EditAboutModalProps> = ({ open, onClose }) => {
   );
 };
 
-export default EditAboutModal;
+export default EditAbout;

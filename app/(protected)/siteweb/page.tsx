@@ -2,11 +2,11 @@
 "use client";
 import NotFound from "@/app/(public)/NotFound";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import RealisationEditor from "@/components/realisation/RealisationEditor";
 import AboutPreview from "@/components/siteweb/AboutPreview";
 import ContactEditor from "@/components/siteweb/ContactEditor";
 import PartenaireEditor from "@/components/siteweb/PartenaireEditor";
 import ProjetEdit from "@/components/siteweb/ProjetEdit";
-import RealisationPage from "@/components/siteweb/RealisationPage";
 import ServicesEditor from "@/components/siteweb/ServicesEditor";
 import SiteWeb from "@/components/siteweb/SiteWeb";
 import { useConnectionStatus } from "@/hooks/useConnectionStatus";
@@ -53,7 +53,7 @@ export default function MaterielsPage() {
             <AboutPreview />
 
             <SectionTitle title="Réalisations" />
-            <RealisationPage />
+            <RealisationEditor />
 
             <SectionTitle title="Projets" />
             <ProjetEdit />

@@ -49,9 +49,8 @@ import {
 } from "@mui/material";
 
 // Import du composant de prévisualisation front-end (si existant)
-import { About } from "./preview/About";
-// Import du modal global d'édition (pour les textes complexes)
-import ShowEditAbout from "../modals/ShowEditAbout";
+import { About } from "./preview/About"
+import EditAbout from "../about/EditAbout";
 
 // --- Types ---
 // Structure correspondant exactement à votre JSON demandé
@@ -367,10 +366,6 @@ export default function AboutPreview() {
               />
             </Tabs>
           </Grid>
-          <Grid item xs={3} sx={{ textAlign: "right", p: 1 }}>
-            {/* Le modal ShowEditAbout gère le reste du contenu (Cards, History, CTA) */}
-            <ShowEditAbout />
-          </Grid>
         </Grid>
       </Box>
 
@@ -383,151 +378,7 @@ export default function AboutPreview() {
 
       {/* VUE ÉDITEUR (HERO IMAGE) */}
       {tabValue === 1 && (
-        <Box sx={{ height: { xs: "auto", md: "calc(100vh - 140px)" }, display: "flex", flexDirection: { xs: "column", md: "row" } }}>
-          
-          {/* GAUCHE : PRÉVISUALISATION IMAGE */}
-          <Box sx={{ flex: 1, p: 3, bgcolor: "#f0f0f0", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-            <Paper 
-              elevation={4}
-              sx={{ 
-                position: "relative", 
-                width: "100%", 
-                maxWidth: 800, 
-                aspectRatio: "16/9", 
-                borderRadius: 2, 
-                overflow: "hidden",
-                border: pendingHeroImage ? "4px dashed #ed6c02" : "none"
-              }}
-            >
-              {data.image.imageUrl ? (
-                <>
-                  <img 
-                    src={data.image.imageUrl} 
-                    alt="Hero" 
-                    style={{ width: "100%", height: "100%", objectFit: "cover" }} 
-                  />
-                  {/* Simulation Overlay Texte */}
-                  <Box sx={{
-                    position: "absolute",
-                    bottom: 0, left: 0, right: 0,
-                    p: 3,
-                    background: "linear-gradient(to top, rgba(0,0,0,0.8), transparent)",
-                    color: "white"
-                  }}>
-                    <Typography variant="overline" sx={{ color: data.image.color, fontWeight: "bold", fontSize: "0.9rem" }}>
-                      {data.image.subTitle}
-                    </Typography>
-                    <Typography variant="h4" fontWeight="bold">
-                      {data.image.title}
-                    </Typography>
-                  </Box>
-                </>
-              ) : (
-                <Box sx={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "#ccc" }}>
-                  <ImageIcon sx={{ fontSize: 60, color: "#999" }} />
-                </Box>
-              )}
-
-              {pendingHeroImage && (
-                <Chip 
-                  label="En attente de sauvegarde" 
-                  color="warning" 
-                  size="small" 
-                  sx={{ position: "absolute", top: 10, right: 10 }} 
-                />
-              )}
-            </Paper>
-
-            <Stack direction="row" spacing={2} sx={{ mt: 3 }}>
-              <Button
-                component="label"
-                variant="contained"
-                startIcon={<CloudUploadIcon />}
-                sx={{ bgcolor: THEME_COLORS.olive }}
-              >
-                Changer l'image
-                <input hidden type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && handleImageSelect(e.target.files[0])} />
-              </Button>
-              {pendingHeroImage && (
-                <Button variant="outlined" color="warning" onClick={handleCancelPending}>
-                  Annuler
-                </Button>
-              )}
-            </Stack>
-          </Box>
-
-          {/* DROITE : FORMULAIRE */}
-          <Box sx={{ width: { xs: "100%", md: 400 }, borderLeft: "1px solid #ddd", bgcolor: "white", display: "flex", flexDirection: "column" }}>
-            <Box sx={{ p: 2, borderBottom: "1px solid #eee", bgcolor: "#fafafa" }}>
-              <Typography variant="h6" fontWeight={600}>Paramètres Hero</Typography>
-            </Box>
-            
-            <Box sx={{ p: 3, flex: 1, overflowY: "auto" }}>
-              <Stack spacing={3}>
-                <TextField
-                  label="Titre Principal"
-                  fullWidth
-                  value={data.image.title}
-                  onChange={(e) => handleImageFieldChange("title", e.target.value)}
-                  variant="outlined"
-                />
-                
-                <TextField
-                  label="Sous-titre / Tagline"
-                  fullWidth
-                  value={data.image.subTitle}
-                  onChange={(e) => handleImageFieldChange("subTitle", e.target.value)}
-                  variant="outlined"
-                  multiline
-                  rows={2}
-                />
-
-                <TextField
-                  label="Couleur d'accent (Sous-titre)"
-                  fullWidth
-                  value={data.image.color}
-                  onChange={(e) => handleImageFieldChange("color", e.target.value)}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <ColorIcon sx={{ color: data.image.color }} />
-                      </InputAdornment>
-                    ),
-                    endAdornment: (
-                      <input 
-                        type="color" 
-                        value={data.image.color} 
-                        onChange={(e) => handleImageFieldChange("color", e.target.value)}
-                        style={{ border: "none", background: "transparent", width: 30, cursor: "pointer" }} 
-                      />
-                    )
-                  }}
-                />
-
-                <Alert severity="info" sx={{ fontSize: "0.85rem" }}>
-                  L'ID Cloudinary sera mis à jour automatiquement lors de la sauvegarde.
-                  <br />
-                  <strong>ID actuel :</strong> {data.image.imageId || "Aucun"}
-                </Alert>
-              </Stack>
-            </Box>
-
-            <Box sx={{ p: 2, borderTop: "1px solid #ddd", bgcolor: "#fafafa", textAlign: "right" }}>
-              <Button
-                variant="contained"
-                onClick={handleSave}
-                disabled={saving}
-                startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
-                sx={{ 
-                  bgcolor: pendingHeroImage ? "#ed6c02" : THEME_COLORS.olive,
-                  "&:hover": { bgcolor: pendingHeroImage ? "#e65100" : "#4a4d2a" }
-                }}
-              >
-                {saving ? "Sauvegarde..." : pendingHeroImage ? "Enregistrer & Uploader" : "Enregistrer"}
-              </Button>
-            </Box>
-          </Box>
-        </Box>
+        <EditAbout/>
       )}
 
       {/* TOAST */}
