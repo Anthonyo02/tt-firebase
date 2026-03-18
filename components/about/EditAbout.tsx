@@ -47,6 +47,7 @@ import ApproachSection from "./ApproachSection";
 import CtaSection from "./CtaSection";
 import { COMPRESSION_OPTIONS, DEFAULT_DATA } from "@/types/constants";
 import EditBannier from "../HeroImageEditor";
+import EditAboutSection from "../siteweb/EditAbout";
 
 interface EditAboutProps {
   onBack?: () => void;
@@ -579,6 +580,10 @@ const EditAbout: React.FC<EditAboutProps> = ({ onBack }) => {
             }}
           >
             <Box sx={{ bgcolor: "#f8fafc" }}>
+              <EditAboutSection
+                open={open}
+                onClose={() => setOpen(false)}
+              />
               <EditBannier
                 open={open}
                 onClose={() => setOpen(false)}

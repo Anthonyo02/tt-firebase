@@ -17,11 +17,16 @@ interface FeatureData {
   description: string;
 }
 
+interface ImageData {
+  imageUrl: string;
+  imageId: string;
+}
+
 interface AboutData {
   description: string;
   experienceYears: string;
   features: FeatureData[];
-  images: string[];
+  images: ImageData[];
   tagline: string;
   title: string;
 }
@@ -46,6 +51,20 @@ const getFeatureColors = (icon: string) => {
   return map[icon] || { bg: "bg-gray-100", icon: "text-gray-600" };
 };
 
+/**
+ * Normalise une image depuis Firestore.
+ * Supporte l'ancien format (string) et le nouveau ({ imageUrl, imageId }).
+ */
+const normalizeImage = (img: any): ImageData => {
+  if (typeof img === "string") {
+    return { imageUrl: img, imageId: "" };
+  }
+  return {
+    imageUrl: img?.imageUrl || "",
+    imageId: img?.imageId || "",
+  };
+};
+
 export function About() {
   const [aboutData, setAboutData] = useState<AboutData | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -60,18 +79,25 @@ export function About() {
       (snap) => {
         if (snap.exists()) {
           const data = snap.data();
+
+          // Normaliser les images (ancien format string[] → nouveau ImageData[])
+          const rawImages = Array.isArray(data.images) ? data.images : [];
+          const normalizedImages = rawImages
+            .map(normalizeImage)
+            .filter((img) => img.imageUrl); // Filtrer les images vides
+
           setAboutData({
             description: data.description ?? "",
             experienceYears: data.experienceYears ?? "5+",
-            features: data.features ?? [],
-            images: data.images ?? [],
+            features: Array.isArray(data.features) ? data.features : [],
+            images: normalizedImages,
             tagline: data.tagline ?? "",
             title: data.title ?? "",
           });
         }
         setLoading(false);
       },
-      () => setLoading(false),
+      () => setLoading(false)
     );
 
     return () => unsub();
@@ -113,28 +139,33 @@ export function About() {
 
             {/* Carousel */}
             <div className="relative z-10 aspect-[4/3] overflow-hidden rounded-2xl bg-gray-200">
-              {aboutData.images.map((src, i) => (
-                <img
-                  key={i}
-                  src={src}
-                  alt={`Équipe ${i + 1}`}
-                  className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ${
-                    i === currentIndex ? "opacity-100" : "opacity-0"
-                  }`}
-                />
-              ))}
+              {aboutData.images.length > 0 ? (
+                aboutData.images.map((img, i) => (
+                  <img
+                    key={img.imageId || i}
+                    src={img.imageUrl}
+                    alt={`Équipe ${i + 1}`}
+                    className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ${
+                      i === currentIndex ? "opacity-100" : "opacity-0"
+                    }`}
+                  />
+                ))
+              ) : (
+                <div className="flex h-full w-full items-center justify-center">
+                  <p className="text-muted-foreground">Aucune image</p>
+                </div>
+              )}
             </div>
 
-            {/* ✅ BADGE QUI FONCTIONNE */}
+            {/* Badge expérience */}
             <Grid
-              
               direction="column"
-              position={"absolute"}
+              position="absolute"
               bottom={-8}
               right={-11}
-              zIndex={'20'}
+              zIndex="20"
               sx={{
-                bgcolor: "var(--tertiary, #6B7280)", // adapte si besoin
+                bgcolor: "var(--tertiary, #6B7280)",
                 p: 2,
                 borderRadius: "12px",
                 boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
@@ -153,7 +184,7 @@ export function About() {
 
               <Grid item>
                 <Typography variant="body2" sx={{ opacity: 0.9 }} color="white">
-                  Années d’expérience
+                  Années d&apos;expérience
                 </Typography>
               </Grid>
             </Grid>
@@ -175,14 +206,14 @@ export function About() {
             </p>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              {aboutData.features.map((f) => {
+              {aboutData.features.map((f, index) => {
                 const Icon = ICON_MAP[f.icon] || Target;
                 const colors = getFeatureColors(f.icon);
 
                 return (
-                  <div key={f.title} className="flex gap-3">
+                  <div key={`${f.title}-${index}`} className="flex gap-3">
                     <div
-                      className={`flex h-10 w-10 items-center justify-center rounded-lg ${colors.bg}`}
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${colors.bg}`}
                     >
                       <Icon className={`h-5 w-5 ${colors.icon}`} />
                     </div>
