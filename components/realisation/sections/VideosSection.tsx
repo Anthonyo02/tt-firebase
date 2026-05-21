@@ -1,7 +1,7 @@
 // components/sections/VideosSection.tsx
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import {
   Box,
   Typography,
@@ -29,6 +29,7 @@ interface VideosSectionProps {
   onAdd: () => void;
   onEdit: (video: VideoItem) => void;
   onDelete: (videoId: string) => void;
+  onReorder: (fromIndex: number, toIndex: number) => void;
 }
 
 export default function VideosSection({
@@ -41,7 +42,33 @@ export default function VideosSection({
   onAdd,
   onEdit,
   onDelete,
+  onReorder,
 }: VideosSectionProps) {
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const handleDragStart = (event: React.DragEvent<HTMLDivElement>, index: number) => {
+    event.dataTransfer.setData("text/plain", index.toString());
+    event.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>, index: number) => {
+    event.preventDefault();
+    setDragOverIndex(index);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>, index: number) => {
+    event.preventDefault();
+    const fromIndex = Number(event.dataTransfer.getData("text/plain"));
+    if (!Number.isNaN(fromIndex) && fromIndex !== index) {
+      onReorder(fromIndex, index);
+    }
+    setDragOverIndex(null);
+  };
+
   return (
     <Box>
       {/* Header */}
@@ -120,7 +147,23 @@ export default function VideosSection({
       {/* Grid */}
       <Grid container spacing={{ xs: 1.5, sm: 2, md: 3 }}>
         {videos.map((video, index) => (
-          <Grid item xs={6} sm={6} md={4} lg={3} key={video.id}>
+          <Grid
+            item
+            xs={6}
+            sm={6}
+            md={4}
+            lg={3}
+            key={video.id}
+            draggable
+            onDragStart={(event) => handleDragStart(event, index)}
+            onDragOver={(event) => handleDragOver(event, index)}
+            onDragLeave={handleDragLeave}
+            onDrop={(event) => handleDrop(event, index)}
+            sx={{
+              cursor: "grab",
+              opacity: dragOverIndex === index ? 0.7 : 1,
+            }}
+          >
             <VideoCard
               video={video}
               index={index}

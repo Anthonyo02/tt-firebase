@@ -162,6 +162,70 @@ export default function RealisationEditor() {
     return parts.length === 0 ? "" : `${parts.join(", ")} en attente`;
   };
 
+  const reorderItems = <T,>(items: T[], fromIndex: number, toIndex: number) => {
+    const updated = [...items];
+    const [moved] = updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, moved);
+    return updated;
+  };
+
+  const canPersistVideoOrder = (videos: VideoItem[]) =>
+    !videos.some((video) => video.thumbnail?.startsWith("blob:"));
+
+  const canPersistPhotoOrder = (photos: PhotoItem[]) =>
+    !photos.some((photo) => photo.images.some((img) => img.imageUrl.startsWith("blob:")));
+
+  const canPersistDigitalProjectOrder = (projects: DigitalProjectItem[]) =>
+    !projects.some((project) => project.image?.startsWith("blob:"));
+
+  const handleReorderVideos = async (fromIndex: number, toIndex: number) => {
+    if (!data) return;
+    const updatedVideos = reorderItems(data.videos, fromIndex, toIndex);
+    setData({ ...data, videos: updatedVideos });
+
+    if (!canPersistVideoOrder(updatedVideos)) return;
+
+    try {
+      await updateDoc(doc(db, "website_content", "realisation_section"), {
+        videos: updatedVideos,
+      });
+    } catch (e: any) {
+      setToast({ msg: "Impossible d'enregistrer l'ordre des vidéos", type: "error" });
+    }
+  };
+
+  const handleReorderPhotos = async (fromIndex: number, toIndex: number) => {
+    if (!data) return;
+    const updatedPhotos = reorderItems(data.photos, fromIndex, toIndex);
+    setData({ ...data, photos: updatedPhotos });
+
+    if (!canPersistPhotoOrder(updatedPhotos)) return;
+
+    try {
+      await updateDoc(doc(db, "website_content", "realisation_section"), {
+        photos: updatedPhotos,
+      });
+    } catch (e: any) {
+      setToast({ msg: "Impossible d'enregistrer l'ordre des photos", type: "error" });
+    }
+  };
+
+  const handleReorderDigitalProjects = async (fromIndex: number, toIndex: number) => {
+    if (!data) return;
+    const updatedProjects = reorderItems(data.digitalProjects, fromIndex, toIndex);
+    setData({ ...data, digitalProjects: updatedProjects });
+
+    if (!canPersistDigitalProjectOrder(updatedProjects)) return;
+
+    try {
+      await updateDoc(doc(db, "website_content", "realisation_section"), {
+        digitalProjects: updatedProjects,
+      });
+    } catch (e: any) {
+      setToast({ msg: "Impossible d'enregistrer l'ordre des projets digitaux", type: "error" });
+    }
+  };
+
   // === SAVE HANDLER ===
   const handleSave = async () => {
     if (!data) return;
@@ -992,6 +1056,7 @@ export default function RealisationEditor() {
                 onAdd={handleAddVideo}
                 onEdit={handleEditVideo}
                 onDelete={handleDeleteVideo}
+                onReorder={handleReorderVideos}
               />
             )}
 
@@ -1007,6 +1072,7 @@ export default function RealisationEditor() {
                 onAdd={handleAddPhoto}
                 onEdit={handleEditPhoto}
                 onDelete={handleDeletePhoto}
+                onReorder={handleReorderPhotos}
               />
             )}
 
@@ -1022,6 +1088,7 @@ export default function RealisationEditor() {
                 onAdd={handleAddDigitalProject}
                 onEdit={handleEditDigitalProject}
                 onDelete={handleDeleteDigitalProject}
+                onReorder={handleReorderDigitalProjects}
               />
             )}
           </Box>

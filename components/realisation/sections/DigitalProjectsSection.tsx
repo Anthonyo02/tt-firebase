@@ -1,7 +1,7 @@
 // components/sections/DigitalProjectsSection.tsx
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import {
   Box,
   Typography,
@@ -28,6 +28,7 @@ interface DigitalProjectsSectionProps {
   onAdd: () => void;
   onEdit: (project: DigitalProjectItem) => void;
   onDelete: (projectId: string) => void;
+  onReorder: (fromIndex: number, toIndex: number) => void;
 }
 
 export default function DigitalProjectsSection({
@@ -40,7 +41,33 @@ export default function DigitalProjectsSection({
   onAdd,
   onEdit,
   onDelete,
+  onReorder,
 }: DigitalProjectsSectionProps) {
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const handleDragStart = (event: React.DragEvent<HTMLDivElement>, index: number) => {
+    event.dataTransfer.setData("text/plain", index.toString());
+    event.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>, index: number) => {
+    event.preventDefault();
+    setDragOverIndex(index);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>, index: number) => {
+    event.preventDefault();
+    const fromIndex = Number(event.dataTransfer.getData("text/plain"));
+    if (!Number.isNaN(fromIndex) && fromIndex !== index) {
+      onReorder(fromIndex, index);
+    }
+    setDragOverIndex(null);
+  };
+
   return (
     <Box>
       {/* Header */}
@@ -121,7 +148,20 @@ export default function DigitalProjectsSection({
       {/* Grid */}
       <Grid container spacing={{ xs: 1.5, sm: 2, md: 3 }}>
         {projects.map((project, index) => (
-          <Grid item xs={6} sm={6} md={4} lg={3} key={project.id}>
+          <Grid
+            item
+            xs={6}
+            sm={6}
+            md={4}
+            lg={3}
+            key={project.id}
+            draggable
+            onDragStart={(event) => handleDragStart(event, index)}
+            onDragOver={(event) => handleDragOver(event, index)}
+            onDragLeave={handleDragLeave}
+            onDrop={(event) => handleDrop(event, index)}
+            sx={{ cursor: "grab", opacity: dragOverIndex === index ? 0.7 : 1 }}
+          >
             <DigitalProjectCard
               project={project}
               index={index}

@@ -1,7 +1,7 @@
 // components/sections/PhotosSection.tsx
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import {
   Box,
   Typography,
@@ -28,6 +28,7 @@ interface PhotosSectionProps {
   onAdd: () => void;
   onEdit: (photo: PhotoItem) => void;
   onDelete: (photoId: string) => void;
+  onReorder: (fromIndex: number, toIndex: number) => void;
 }
 
 export default function PhotosSection({
@@ -40,7 +41,33 @@ export default function PhotosSection({
   onAdd,
   onEdit,
   onDelete,
+  onReorder,
 }: PhotosSectionProps) {
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const handleDragStart = (event: React.DragEvent<HTMLDivElement>, index: number) => {
+    event.dataTransfer.setData("text/plain", index.toString());
+    event.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>, index: number) => {
+    event.preventDefault();
+    setDragOverIndex(index);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>, index: number) => {
+    event.preventDefault();
+    const fromIndex = Number(event.dataTransfer.getData("text/plain"));
+    if (!Number.isNaN(fromIndex) && fromIndex !== index) {
+      onReorder(fromIndex, index);
+    }
+    setDragOverIndex(null);
+  };
+
   return (
     <Box>
       {/* Header */}
@@ -119,7 +146,20 @@ export default function PhotosSection({
       {/* Grid */}
       <Grid container spacing={{ xs: 1.5, sm: 2, md: 3 }}>
         {photos.map((photo, index) => (
-          <Grid item xs={6} sm={6} md={4} lg={3} key={photo.id}>
+          <Grid
+            item
+            xs={6}
+            sm={6}
+            md={4}
+            lg={3}
+            key={photo.id}
+            draggable
+            onDragStart={(event) => handleDragStart(event, index)}
+            onDragOver={(event) => handleDragOver(event, index)}
+            onDragLeave={handleDragLeave}
+            onDrop={(event) => handleDrop(event, index)}
+            sx={{ cursor: "grab", opacity: dragOverIndex === index ? 0.7 : 1 }}
+          >
             <PhotoCard
               photo={photo}
               index={index}

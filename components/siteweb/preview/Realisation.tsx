@@ -123,32 +123,26 @@ export default function Realisation() {
         const data = snapshot.data();
 
         // Transformation des vidéos
-        const loadedVideos = (data.videos || [])
-          .map((v: any) => ({
-            ...v,
-            thumbnail: v.thumbnail || getYouTubeThumbnail(v.videoUrl),
-            category: "video",
-          }))
-          .reverse();
+        const loadedVideos = (data.videos || []).map((v: any) => ({
+          ...v,
+          thumbnail: v.thumbnail || getYouTubeThumbnail(v.videoUrl),
+          category: "video",
+        }));
 
         // Transformation des photos
-        const loadedPhotos = (data.photos || [])
-          .map((p: any) => ({
-            ...p,
-            images: p.images || [],
-            driveLink: p.driveLink || null, // AJOUT : Récupération du lien Drive
-            category: "photo",
-          }))
-          .reverse();
+        const loadedPhotos = (data.photos || []).map((p: any) => ({
+          ...p,
+          images: p.images || [],
+          driveLink: p.driveLink || null, // AJOUT : Récupération du lien Drive
+          category: "photo",
+        }));
 
         // Transformation des projets digitaux
-        const loadedDigitalProjects = (data.digitalProjects || [])
-          .map((dp: any) => ({
-            ...dp,
-            category: "digital",
-            technologies: dp.technologies || [],
-          }))
-          .reverse();
+        const loadedDigitalProjects = (data.digitalProjects || []).map((dp: any) => ({
+          ...dp,
+          category: "digital",
+          technologies: dp.technologies || [],
+        }));
 
         setVideos(loadedVideos);
         setPhotos(loadedPhotos);
