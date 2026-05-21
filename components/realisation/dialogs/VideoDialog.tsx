@@ -33,6 +33,9 @@ import {
   getYouTubeVideoId,
 } from "../utils";
 
+const MAX_FILE_SIZE_KB = 150;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_KB * 1024;
+
 interface VideoDialogProps {
   dialogState: VideoDialogState;
   tempImage: TempDialogImage | null;  // ✅ NOUVEAU
@@ -63,9 +66,81 @@ export default function VideoDialog({
   };
 
   // ✅ NOUVEAU : Handler pour l'upload du thumbnail
-  const handleThumbnailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const compressImageFile = async (file: File): Promise<File> => {
+    if (file.size <= MAX_FILE_SIZE_BYTES) {
+      return file;
+    }
+
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            reject(new Error("Canvas context unavailable"));
+            return;
+          }
+
+          let { width, height } = img;
+          const maxDimension = 1200;
+          if (width > maxDimension || height > maxDimension) {
+            const ratio = Math.min(maxDimension / width, maxDimension / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const tryCompress = (quality: number) => {
+            canvas.toBlob(
+              (blob) => {
+                if (!blob) {
+                  reject(new Error("Compression failed"));
+                  return;
+                }
+
+                if (blob.size <= MAX_FILE_SIZE_BYTES || quality <= 0.1) {
+                  resolve(
+                    new File([blob], file.name, {
+                      type: "image/jpeg",
+                      lastModified: Date.now(),
+                    })
+                  );
+                } else {
+                  tryCompress(quality - 0.1);
+                }
+              },
+              "image/jpeg",
+              quality
+            );
+          };
+
+          tryCompress(0.9);
+        };
+        img.onerror = () => reject(new Error("Image load failed"));
+        img.src = reader.result as string;
+      };
+      reader.onerror = () => reject(new Error("File read failed"));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleThumbnailChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      onImageSelect(e.target.files[0]);
+      try {
+        const selectedFile = e.target.files[0];
+        const compressedFile = await compressImageFile(selectedFile);
+        onImageSelect(compressedFile);
+      } catch (error) {
+        console.error("Erreur de compression du thumbnail :", error);
+        if (e.target.files[0]) {
+          onImageSelect(e.target.files[0]);
+        }
+      }
     }
   };
 

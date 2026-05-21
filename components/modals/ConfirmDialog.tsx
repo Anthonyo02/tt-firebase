@@ -1,4 +1,4 @@
-import React from "react";
+import React, { ReactNode } from "react";
 import {
   Dialog,
   DialogContent,
@@ -24,7 +24,7 @@ interface ConfirmDialogProps {
   open: boolean;
   isLoading: boolean;
   title: string;
-  message: string;
+   message: ReactNode;
   onConfirm: () => void;
   onCancel: () => void;
   confirmText?: string;

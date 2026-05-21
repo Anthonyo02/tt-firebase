@@ -46,7 +46,7 @@ import { THEME, CLIENT_OPTIONS } from "../constants";
 // CONSTANTS
 // ============================================================
 
-const MAX_IMAGES = 5;
+const MAX_IMAGES = 10;
 const MAX_FILE_SIZE_KB = 150;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_KB * 1024;
 

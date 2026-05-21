@@ -57,6 +57,7 @@ import DigitalProjectsSection from "./sections/DigitalProjectsSection";
 import VideoDialog from "./dialogs/VideoDialog";
 import PhotoDialog from "./dialogs/PhotoDialog";
 import DigitalProjectDialog from "./dialogs/DigitalProjectDialog";
+import ConfirmDialog from "../modals/ConfirmDialog";
 
 export default function RealisationEditor() {
   const theme = useTheme();
@@ -68,24 +69,42 @@ export default function RealisationEditor() {
 
   // UI States
   const [tabValue, setTabValue] = useState(0);
-  const [editorTab, setEditorTab] = useState<"videos" | "photos" | "digitalProjects">("videos");
+  const [editorTab, setEditorTab] = useState<
+    "videos" | "photos" | "digitalProjects"
+  >("videos");
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingItem, setDeletingItem] = useState<string | null>(null);
   const [updatingItem, setUpdatingItem] = useState<string | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    open: boolean;
+    type: "video" | "photo" | "digitalProject";
+    id: string;
+    title: string;
+  } | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [open, setOpen] = useState(true);
 
   // Pending States
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
-  const [pendingNewVideoIds, setPendingNewVideoIds] = useState<Set<string>>(new Set());
-  const [pendingNewPhotoIds, setPendingNewPhotoIds] = useState<Set<string>>(new Set());
-  const [pendingNewDigitalProjectIds, setPendingNewDigitalProjectIds] = useState<Set<string>>(new Set());
+  const [pendingNewVideoIds, setPendingNewVideoIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [pendingNewPhotoIds, setPendingNewPhotoIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [pendingNewDigitalProjectIds, setPendingNewDigitalProjectIds] =
+    useState<Set<string>>(new Set());
 
   // Temp Dialog Images
-  const [tempDialogImages, setTempDialogImages] = useState<TempDialogImage[]>([]);
-  const [tempDialogImage, setTempDialogImage] = useState<TempDialogImage | null>(null);
-  const [tempVideoImage, setTempVideoImage] = useState<TempDialogImage | null>(null);
+  const [tempDialogImages, setTempDialogImages] = useState<TempDialogImage[]>(
+    [],
+  );
+  const [tempDialogImage, setTempDialogImage] =
+    useState<TempDialogImage | null>(null);
+  const [tempVideoImage, setTempVideoImage] = useState<TempDialogImage | null>(
+    null,
+  );
 
   // Dialog States
   const [videoDialog, setVideoDialog] = useState<VideoDialogState>({
@@ -98,11 +117,12 @@ export default function RealisationEditor() {
     mode: "add",
     data: null,
   });
-  const [digitalProjectDialog, setDigitalProjectDialog] = useState<DigitalProjectDialogState>({
-    open: false,
-    mode: "add",
-    data: null,
-  });
+  const [digitalProjectDialog, setDigitalProjectDialog] =
+    useState<DigitalProjectDialogState>({
+      open: false,
+      mode: "add",
+      data: null,
+    });
 
   // Cleanup
   useEffect(() => {
@@ -119,21 +139,23 @@ export default function RealisationEditor() {
     (videoId: string) =>
       pendingNewVideoIds.has(videoId) ||
       pendingImages.some((p) => p.itemId === videoId && p.type === "video"),
-    [pendingNewVideoIds, pendingImages]
+    [pendingNewVideoIds, pendingImages],
   );
 
   const isPendingPhoto = useCallback(
     (photoId: string) =>
       pendingNewPhotoIds.has(photoId) ||
       pendingImages.some((p) => p.itemId === photoId && p.type === "photo"),
-    [pendingNewPhotoIds, pendingImages]
+    [pendingNewPhotoIds, pendingImages],
   );
 
   const isPendingDigitalProject = useCallback(
     (projectId: string) =>
       pendingNewDigitalProjectIds.has(projectId) ||
-      pendingImages.some((p) => p.itemId === projectId && p.type === "digitalProject"),
-    [pendingNewDigitalProjectIds, pendingImages]
+      pendingImages.some(
+        (p) => p.itemId === projectId && p.type === "digitalProject",
+      ),
+    [pendingNewDigitalProjectIds, pendingImages],
   );
 
   const totalPendingVideos = new Set([
@@ -147,18 +169,33 @@ export default function RealisationEditor() {
   ]).size;
 
   const totalPendingDigitalProjects = new Set([
-    ...pendingImages.filter((p) => p.type === "digitalProject").map((p) => p.itemId),
+    ...pendingImages
+      .filter((p) => p.type === "digitalProject")
+      .map((p) => p.itemId),
     ...Array.from(pendingNewDigitalProjectIds),
   ]).size;
 
-  const hasChangesToSave = totalPendingVideos > 0 || totalPendingPhotos > 0 || totalPendingDigitalProjects > 0;
-  const totalPendingCount = totalPendingVideos + totalPendingPhotos + totalPendingDigitalProjects;
+  const hasChangesToSave =
+    totalPendingVideos > 0 ||
+    totalPendingPhotos > 0 ||
+    totalPendingDigitalProjects > 0;
+  const totalPendingCount =
+    totalPendingVideos + totalPendingPhotos + totalPendingDigitalProjects;
 
   const getPendingLabel = (): string => {
     const parts: string[] = [];
-    if (totalPendingVideos > 0) parts.push(`${totalPendingVideos} vidéo${totalPendingVideos > 1 ? "s" : ""}`);
-    if (totalPendingPhotos > 0) parts.push(`${totalPendingPhotos} photo${totalPendingPhotos > 1 ? "s" : ""}`);
-    if (totalPendingDigitalProjects > 0) parts.push(`${totalPendingDigitalProjects} projet${totalPendingDigitalProjects > 1 ? "s" : ""}`);
+    if (totalPendingVideos > 0)
+      parts.push(
+        `${totalPendingVideos} vidéo${totalPendingVideos > 1 ? "s" : ""}`,
+      );
+    if (totalPendingPhotos > 0)
+      parts.push(
+        `${totalPendingPhotos} photo${totalPendingPhotos > 1 ? "s" : ""}`,
+      );
+    if (totalPendingDigitalProjects > 0)
+      parts.push(
+        `${totalPendingDigitalProjects} projet${totalPendingDigitalProjects > 1 ? "s" : ""}`,
+      );
     return parts.length === 0 ? "" : `${parts.join(", ")} en attente`;
   };
 
@@ -173,7 +210,9 @@ export default function RealisationEditor() {
     !videos.some((video) => video.thumbnail?.startsWith("blob:"));
 
   const canPersistPhotoOrder = (photos: PhotoItem[]) =>
-    !photos.some((photo) => photo.images.some((img) => img.imageUrl.startsWith("blob:")));
+    !photos.some((photo) =>
+      photo.images.some((img) => img.imageUrl.startsWith("blob:")),
+    );
 
   const canPersistDigitalProjectOrder = (projects: DigitalProjectItem[]) =>
     !projects.some((project) => project.image?.startsWith("blob:"));
@@ -190,7 +229,10 @@ export default function RealisationEditor() {
         videos: updatedVideos,
       });
     } catch (e: any) {
-      setToast({ msg: "Impossible d'enregistrer l'ordre des vidéos", type: "error" });
+      setToast({
+        msg: "Impossible d'enregistrer l'ordre des vidéos",
+        type: "error",
+      });
     }
   };
 
@@ -206,13 +248,23 @@ export default function RealisationEditor() {
         photos: updatedPhotos,
       });
     } catch (e: any) {
-      setToast({ msg: "Impossible d'enregistrer l'ordre des photos", type: "error" });
+      setToast({
+        msg: "Impossible d'enregistrer l'ordre des photos",
+        type: "error",
+      });
     }
   };
 
-  const handleReorderDigitalProjects = async (fromIndex: number, toIndex: number) => {
+  const handleReorderDigitalProjects = async (
+    fromIndex: number,
+    toIndex: number,
+  ) => {
     if (!data) return;
-    const updatedProjects = reorderItems(data.digitalProjects, fromIndex, toIndex);
+    const updatedProjects = reorderItems(
+      data.digitalProjects,
+      fromIndex,
+      toIndex,
+    );
     setData({ ...data, digitalProjects: updatedProjects });
 
     if (!canPersistDigitalProjectOrder(updatedProjects)) return;
@@ -222,7 +274,10 @@ export default function RealisationEditor() {
         digitalProjects: updatedProjects,
       });
     } catch (e: any) {
-      setToast({ msg: "Impossible d'enregistrer l'ordre des projets digitaux", type: "error" });
+      setToast({
+        msg: "Impossible d'enregistrer l'ordre des projets digitaux",
+        type: "error",
+      });
     }
   };
 
@@ -239,22 +294,32 @@ export default function RealisationEditor() {
       // Upload thumbnails vidéos
       for (const pending of pendingImages.filter((p) => p.type === "video")) {
         try {
-          const compressedFile = await imageCompression(pending.file, COMPRESSION_OPTIONS);
+          const compressedFile = await imageCompression(
+            pending.file,
+            COMPRESSION_OPTIONS,
+          );
           const formData = new FormData();
           formData.append("file", compressedFile);
 
-          const res = await fetch("/api/cloudinary/uploadweb/realisationimage", {
-            method: "POST",
-            body: formData,
-          });
+          const res = await fetch(
+            "/api/cloudinary/uploadweb/realisationimage",
+            {
+              method: "POST",
+              body: formData,
+            },
+          );
           const resData = await res.json();
 
           if (!res.ok) throw new Error(resData.error || "Erreur upload");
 
           finalData.videos = finalData.videos.map((v) =>
             v.id === pending.itemId
-              ? { ...v, thumbnail: resData.imageUrl, thumbnailPublicId: resData.imagePublicId }
-              : v
+              ? {
+                  ...v,
+                  thumbnail: resData.imageUrl,
+                  thumbnailPublicId: resData.imagePublicId,
+                }
+              : v,
           );
 
           URL.revokeObjectURL(pending.previewUrl);
@@ -279,22 +344,33 @@ export default function RealisationEditor() {
         const newImages = [];
 
         for (const img of photo.images) {
-          const pending = pendingList.find((p) => p.previewUrl === img.imageUrl);
+          const pending = pendingList.find(
+            (p) => p.previewUrl === img.imageUrl,
+          );
           if (pending) {
             try {
-              const compressedFile = await imageCompression(pending.file, COMPRESSION_OPTIONS);
+              const compressedFile = await imageCompression(
+                pending.file,
+                COMPRESSION_OPTIONS,
+              );
               const formData = new FormData();
               formData.append("file", compressedFile);
 
-              const res = await fetch("/api/cloudinary/uploadweb/realisationimage", {
-                method: "POST",
-                body: formData,
-              });
+              const res = await fetch(
+                "/api/cloudinary/uploadweb/realisationimage",
+                {
+                  method: "POST",
+                  body: formData,
+                },
+              );
               const resData = await res.json();
 
               if (!res.ok) throw new Error(resData.error || "Erreur upload");
 
-              newImages.push({ imageUrl: resData.imageUrl, imagePublicId: resData.imagePublicId });
+              newImages.push({
+                imageUrl: resData.imageUrl,
+                imagePublicId: resData.imagePublicId,
+              });
               URL.revokeObjectURL(pending.previewUrl);
             } catch (e: any) {
               uploadErrors.push(pending.file.name);
@@ -309,24 +385,36 @@ export default function RealisationEditor() {
       }
 
       // Upload digital projects
-      for (const pending of pendingImages.filter((p) => p.type === "digitalProject")) {
+      for (const pending of pendingImages.filter(
+        (p) => p.type === "digitalProject",
+      )) {
         try {
-          const compressedFile = await imageCompression(pending.file, COMPRESSION_OPTIONS);
+          const compressedFile = await imageCompression(
+            pending.file,
+            COMPRESSION_OPTIONS,
+          );
           const formData = new FormData();
           formData.append("file", compressedFile);
 
-          const res = await fetch("/api/cloudinary/uploadweb/realisationimage", {
-            method: "POST",
-            body: formData,
-          });
+          const res = await fetch(
+            "/api/cloudinary/uploadweb/realisationimage",
+            {
+              method: "POST",
+              body: formData,
+            },
+          );
           const resData = await res.json();
 
           if (!res.ok) throw new Error(resData.error || "Erreur upload");
 
           finalData.digitalProjects = finalData.digitalProjects.map((dp) =>
             dp.id === pending.itemId
-              ? { ...dp, image: resData.imageUrl, imagePublicId: resData.imagePublicId }
-              : dp
+              ? {
+                  ...dp,
+                  image: resData.imageUrl,
+                  imagePublicId: resData.imagePublicId,
+                }
+              : dp,
           );
 
           URL.revokeObjectURL(pending.previewUrl);
@@ -351,7 +439,10 @@ export default function RealisationEditor() {
       });
 
       setToast({
-        msg: uploadErrors.length > 0 ? `${uploadErrors.length} image(s) non uploadée(s)` : "Sauvegarde réussie !",
+        msg:
+          uploadErrors.length > 0
+            ? `${uploadErrors.length} image(s) non uploadée(s)`
+            : "Sauvegarde réussie !",
         type: uploadErrors.length > 0 ? "warning" : "success",
       });
     } catch (e: any) {
@@ -443,14 +534,20 @@ export default function RealisationEditor() {
         setPendingNewVideoIds((prev) => new Set([...prev, videoId]));
       }
 
-      setToast({ msg: "Vidéo ajoutée - N'oubliez pas d'enregistrer", type: "info" });
+      setToast({
+        msg: "Vidéo ajoutée - N'oubliez pas d'enregistrer",
+        type: "info",
+      });
     } else {
       setUpdatingItem(videoId);
       try {
         let updatedVideo = { ...videoDialog.data };
 
         if (tempVideoImage) {
-          const compressedFile = await imageCompression(tempVideoImage.file, COMPRESSION_OPTIONS);
+          const compressedFile = await imageCompression(
+            tempVideoImage.file,
+            COMPRESSION_OPTIONS,
+          );
           const formData = new FormData();
           formData.append("file", compressedFile);
 
@@ -459,10 +556,13 @@ export default function RealisationEditor() {
             formData.append("publicId", existingVideo.thumbnailPublicId);
           }
 
-          const res = await fetch("/api/cloudinary/uploadweb/realisationimage", {
-            method: "POST",
-            body: formData,
-          });
+          const res = await fetch(
+            "/api/cloudinary/uploadweb/realisationimage",
+            {
+              method: "POST",
+              body: formData,
+            },
+          );
           const resData = await res.json();
 
           if (!res.ok) throw new Error(resData.error || "Erreur upload");
@@ -477,8 +577,12 @@ export default function RealisationEditor() {
           setTempVideoImage(null);
         }
 
-        const updatedVideos = data.videos.map((v) => (v.id === videoId ? updatedVideo : v));
-        await updateDoc(doc(db, "website_content", "realisation_section"), { videos: updatedVideos });
+        const updatedVideos = data.videos.map((v) =>
+          v.id === videoId ? updatedVideo : v,
+        );
+        await updateDoc(doc(db, "website_content", "realisation_section"), {
+          videos: updatedVideos,
+        });
         setData({ ...data, videos: updatedVideos });
         setToast({ msg: "Vidéo mise à jour !", type: "success" });
       } catch (e: any) {
@@ -491,13 +595,28 @@ export default function RealisationEditor() {
     handleCloseVideoDialog();
   };
 
+  const handleRequestDeleteVideo = (videoId: string) => {
+    if (!data) return;
+    const video = data.videos.find((v) => v.id === videoId);
+    if (!video) return;
+
+    setDeleteConfirmation({
+      open: true,
+      type: "video",
+      id: videoId,
+      title: video.title || "cette vidéo",
+    });
+  };
+
   const handleDeleteVideo = async (videoId: string) => {
     if (!data) return;
     const video = data.videos.find((v) => v.id === videoId);
     if (!video) return;
 
     if (isPendingVideo(videoId)) {
-      const pendingImage = pendingImages.find((p) => p.itemId === videoId && p.type === "video");
+      const pendingImage = pendingImages.find(
+        (p) => p.itemId === videoId && p.type === "video",
+      );
       if (pendingImage) {
         URL.revokeObjectURL(pendingImage.previewUrl);
         setPendingImages((prev) => prev.filter((p) => p.itemId !== videoId));
@@ -529,7 +648,9 @@ export default function RealisationEditor() {
       }
 
       const updatedVideos = data.videos.filter((v) => v.id !== videoId);
-      await updateDoc(doc(db, "website_content", "realisation_section"), { videos: updatedVideos });
+      await updateDoc(doc(db, "website_content", "realisation_section"), {
+        videos: updatedVideos,
+      });
       setData({ ...data, videos: updatedVideos });
       setToast({ msg: "Vidéo supprimée !", type: "success" });
     } catch (e: any) {
@@ -588,14 +709,19 @@ export default function RealisationEditor() {
     });
 
     setTempDialogImages([...tempDialogImages, ...newTempImages]);
-    setPhotoDialog({ ...photoDialog, data: { ...photoDialog.data, images: newPreviewImages } });
+    setPhotoDialog({
+      ...photoDialog,
+      data: { ...photoDialog.data, images: newPreviewImages },
+    });
   };
 
   const handleRemovePhotoImage = (index: number) => {
     if (!photoDialog.data) return;
 
     const imageToRemove = photoDialog.data.images[index];
-    const tempIndex = tempDialogImages.findIndex((t) => t.previewUrl === imageToRemove.imageUrl);
+    const tempIndex = tempDialogImages.findIndex(
+      (t) => t.previewUrl === imageToRemove.imageUrl,
+    );
 
     if (tempIndex !== -1) {
       URL.revokeObjectURL(tempDialogImages[tempIndex].previewUrl);
@@ -603,7 +729,10 @@ export default function RealisationEditor() {
     }
 
     const newImages = photoDialog.data.images.filter((_, i) => i !== index);
-    setPhotoDialog({ ...photoDialog, data: { ...photoDialog.data, images: newImages } });
+    setPhotoDialog({
+      ...photoDialog,
+      data: { ...photoDialog.data, images: newImages },
+    });
   };
 
   const handleSavePhotoDialog = async () => {
@@ -615,13 +744,16 @@ export default function RealisationEditor() {
       setData({ ...data, photos: [...data.photos, photoDialog.data] });
 
       if (tempDialogImages.length > 0) {
-        const newPendingImages: PendingImage[] = tempDialogImages.map((temp, index) => ({
-          file: temp.file,
-          previewUrl: temp.previewUrl,
-          itemId: photoId,
-          type: "photo" as const,
-          imageIndex: photoDialog.data!.images.length - tempDialogImages.length + index,
-        }));
+        const newPendingImages: PendingImage[] = tempDialogImages.map(
+          (temp, index) => ({
+            file: temp.file,
+            previewUrl: temp.previewUrl,
+            itemId: photoId,
+            type: "photo" as const,
+            imageIndex:
+              photoDialog.data!.images.length - tempDialogImages.length + index,
+          }),
+        );
 
         setPendingImages((prev) => [...prev, ...newPendingImages]);
         setTempDialogImages([]);
@@ -629,7 +761,10 @@ export default function RealisationEditor() {
         setPendingNewPhotoIds((prev) => new Set([...prev, photoId]));
       }
 
-      setToast({ msg: "Photo ajoutée - N'oubliez pas d'enregistrer", type: "info" });
+      setToast({
+        msg: "Photo ajoutée - N'oubliez pas d'enregistrer",
+        type: "info",
+      });
     } else {
       setUpdatingItem(photoId);
       try {
@@ -637,22 +772,33 @@ export default function RealisationEditor() {
         const uploadedImages = [];
 
         for (const img of updatedPhoto.images) {
-          const tempImg = tempDialogImages.find((t) => t.previewUrl === img.imageUrl);
+          const tempImg = tempDialogImages.find(
+            (t) => t.previewUrl === img.imageUrl,
+          );
 
           if (tempImg) {
-            const compressedFile = await imageCompression(tempImg.file, COMPRESSION_OPTIONS);
+            const compressedFile = await imageCompression(
+              tempImg.file,
+              COMPRESSION_OPTIONS,
+            );
             const formData = new FormData();
             formData.append("file", compressedFile);
 
-            const res = await fetch("/api/cloudinary/uploadweb/realisationimage", {
-              method: "POST",
-              body: formData,
-            });
+            const res = await fetch(
+              "/api/cloudinary/uploadweb/realisationimage",
+              {
+                method: "POST",
+                body: formData,
+              },
+            );
             const resData = await res.json();
 
             if (!res.ok) throw new Error(resData.error || "Erreur upload");
 
-            uploadedImages.push({ imageUrl: resData.imageUrl, imagePublicId: resData.imagePublicId });
+            uploadedImages.push({
+              imageUrl: resData.imageUrl,
+              imagePublicId: resData.imagePublicId,
+            });
             URL.revokeObjectURL(tempImg.previewUrl);
           } else {
             uploadedImages.push(img);
@@ -662,8 +808,12 @@ export default function RealisationEditor() {
         updatedPhoto.images = uploadedImages;
         setTempDialogImages([]);
 
-        const updatedPhotos = data.photos.map((p) => (p.id === photoId ? updatedPhoto : p));
-        await updateDoc(doc(db, "website_content", "realisation_section"), { photos: updatedPhotos });
+        const updatedPhotos = data.photos.map((p) =>
+          p.id === photoId ? updatedPhoto : p,
+        );
+        await updateDoc(doc(db, "website_content", "realisation_section"), {
+          photos: updatedPhotos,
+        });
 
         setData({ ...data, photos: updatedPhotos });
         setToast({ msg: "Photo mise à jour !", type: "success" });
@@ -677,13 +827,28 @@ export default function RealisationEditor() {
     setPhotoDialog({ open: false, mode: "add", data: null });
   };
 
+  const handleRequestDeletePhoto = (photoId: string) => {
+    if (!data) return;
+    const photo = data.photos.find((p) => p.id === photoId);
+    if (!photo) return;
+
+    setDeleteConfirmation({
+      open: true,
+      type: "photo",
+      id: photoId,
+      title: photo.title || "cette photo",
+    });
+  };
+
   const handleDeletePhoto = async (photoId: string) => {
     if (!data) return;
     const photo = data.photos.find((p) => p.id === photoId);
     if (!photo) return;
 
     if (isPendingPhoto(photoId)) {
-      const pendingForPhoto = pendingImages.filter((p) => p.itemId === photoId && p.type === "photo");
+      const pendingForPhoto = pendingImages.filter(
+        (p) => p.itemId === photoId && p.type === "photo",
+      );
       pendingForPhoto.forEach((p) => URL.revokeObjectURL(p.previewUrl));
       setPendingImages((prev) => prev.filter((p) => p.itemId !== photoId));
 
@@ -715,7 +880,9 @@ export default function RealisationEditor() {
       }
 
       const updatedPhotos = data.photos.filter((p) => p.id !== photoId);
-      await updateDoc(doc(db, "website_content", "realisation_section"), { photos: updatedPhotos });
+      await updateDoc(doc(db, "website_content", "realisation_section"), {
+        photos: updatedPhotos,
+      });
 
       setData({ ...data, photos: updatedPhotos });
       setToast({ msg: "Photo supprimée !", type: "success" });
@@ -766,7 +933,9 @@ export default function RealisationEditor() {
     setDigitalProjectDialog({ open: false, mode: "add", data: null });
   };
 
-  const handleDigitalProjectDialogChange = (projectData: DigitalProjectItem) => {
+  const handleDigitalProjectDialogChange = (
+    projectData: DigitalProjectItem,
+  ) => {
     setDigitalProjectDialog({ ...digitalProjectDialog, data: projectData });
   };
 
@@ -791,7 +960,10 @@ export default function RealisationEditor() {
     const projectId = digitalProjectDialog.data.id;
 
     if (digitalProjectDialog.mode === "add") {
-      setData({ ...data, digitalProjects: [...data.digitalProjects, digitalProjectDialog.data] });
+      setData({
+        ...data,
+        digitalProjects: [...data.digitalProjects, digitalProjectDialog.data],
+      });
 
       if (tempDialogImage) {
         setPendingImages((prev) => [
@@ -808,26 +980,37 @@ export default function RealisationEditor() {
         setPendingNewDigitalProjectIds((prev) => new Set([...prev, projectId]));
       }
 
-      setToast({ msg: "Projet ajouté - N'oubliez pas d'enregistrer", type: "info" });
+      setToast({
+        msg: "Projet ajouté - N'oubliez pas d'enregistrer",
+        type: "info",
+      });
     } else {
       setUpdatingItem(projectId);
       try {
         let updatedProject = { ...digitalProjectDialog.data };
 
         if (tempDialogImage) {
-          const compressedFile = await imageCompression(tempDialogImage.file, COMPRESSION_OPTIONS);
+          const compressedFile = await imageCompression(
+            tempDialogImage.file,
+            COMPRESSION_OPTIONS,
+          );
           const formData = new FormData();
           formData.append("file", compressedFile);
 
-          const existingProject = data.digitalProjects.find((p) => p.id === projectId);
+          const existingProject = data.digitalProjects.find(
+            (p) => p.id === projectId,
+          );
           if (existingProject?.imagePublicId) {
             formData.append("publicId", existingProject.imagePublicId);
           }
 
-          const res = await fetch("/api/cloudinary/uploadweb/realisationimage", {
-            method: "POST",
-            body: formData,
-          });
+          const res = await fetch(
+            "/api/cloudinary/uploadweb/realisationimage",
+            {
+              method: "POST",
+              body: formData,
+            },
+          );
           const resData = await res.json();
 
           if (!res.ok) throw new Error(resData.error || "Erreur upload");
@@ -842,8 +1025,12 @@ export default function RealisationEditor() {
           setTempDialogImage(null);
         }
 
-        const updatedProjects = data.digitalProjects.map((p) => (p.id === projectId ? updatedProject : p));
-        await updateDoc(doc(db, "website_content", "realisation_section"), { digitalProjects: updatedProjects });
+        const updatedProjects = data.digitalProjects.map((p) =>
+          p.id === projectId ? updatedProject : p,
+        );
+        await updateDoc(doc(db, "website_content", "realisation_section"), {
+          digitalProjects: updatedProjects,
+        });
 
         setData({ ...data, digitalProjects: updatedProjects });
         setToast({ msg: "Projet mis à jour !", type: "success" });
@@ -857,13 +1044,28 @@ export default function RealisationEditor() {
     setDigitalProjectDialog({ open: false, mode: "add", data: null });
   };
 
+  const handleRequestDeleteDigitalProject = (projectId: string) => {
+    if (!data) return;
+    const project = data.digitalProjects.find((p) => p.id === projectId);
+    if (!project) return;
+
+    setDeleteConfirmation({
+      open: true,
+      type: "digitalProject",
+      id: projectId,
+      title: project.title || "ce projet",
+    });
+  };
+
   const handleDeleteDigitalProject = async (projectId: string) => {
     if (!data) return;
     const project = data.digitalProjects.find((p) => p.id === projectId);
     if (!project) return;
 
     if (isPendingDigitalProject(projectId)) {
-      const pendingImage = pendingImages.find((p) => p.itemId === projectId && p.type === "digitalProject");
+      const pendingImage = pendingImages.find(
+        (p) => p.itemId === projectId && p.type === "digitalProject",
+      );
       if (pendingImage) {
         URL.revokeObjectURL(pendingImage.previewUrl);
         setPendingImages((prev) => prev.filter((p) => p.itemId !== projectId));
@@ -875,7 +1077,10 @@ export default function RealisationEditor() {
         return newSet;
       });
 
-      setData({ ...data, digitalProjects: data.digitalProjects.filter((p) => p.id !== projectId) });
+      setData({
+        ...data,
+        digitalProjects: data.digitalProjects.filter((p) => p.id !== projectId),
+      });
       setToast({ msg: "Projet retiré", type: "success" });
       return;
     }
@@ -894,8 +1099,12 @@ export default function RealisationEditor() {
         }
       }
 
-      const updatedProjects = data.digitalProjects.filter((p) => p.id !== projectId);
-      await updateDoc(doc(db, "website_content", "realisation_section"), { digitalProjects: updatedProjects });
+      const updatedProjects = data.digitalProjects.filter(
+        (p) => p.id !== projectId,
+      );
+      await updateDoc(doc(db, "website_content", "realisation_section"), {
+        digitalProjects: updatedProjects,
+      });
 
       setData({ ...data, digitalProjects: updatedProjects });
       setToast({ msg: "Projet supprimé !", type: "success" });
@@ -916,10 +1125,18 @@ export default function RealisationEditor() {
         ...data,
         videos: data.videos.filter((v) => !pendingNewVideoIds.has(v.id)),
         photos: data.photos.filter(
-          (p) => !pendingNewPhotoIds.has(p.id) && !pendingImages.some((pi) => pi.itemId === p.id && pi.type === "photo")
+          (p) =>
+            !pendingNewPhotoIds.has(p.id) &&
+            !pendingImages.some(
+              (pi) => pi.itemId === p.id && pi.type === "photo",
+            ),
         ),
         digitalProjects: data.digitalProjects.filter(
-          (dp) => !pendingNewDigitalProjectIds.has(dp.id) && !pendingImages.some((pi) => pi.itemId === dp.id && pi.type === "digitalProject")
+          (dp) =>
+            !pendingNewDigitalProjectIds.has(dp.id) &&
+            !pendingImages.some(
+              (pi) => pi.itemId === dp.id && pi.type === "digitalProject",
+            ),
         ),
       };
       setData(newData);
@@ -1024,7 +1241,11 @@ export default function RealisationEditor() {
       {tabValue === 1 && (
         <Fade in timeout={500}>
           <Box sx={{ maxWidth: 1600, mx: "auto", p: { xs: 1, sm: 2, md: 4 } }}>
-            <EditBannier open={open} onClose={() => setOpen(false)} url="bannier_realisation" />
+            <EditBannier
+              open={open}
+              onClose={() => setOpen(false)}
+              url="bannier_realisation"
+            />
 
             <EditorHeader
               editorTab={editorTab}
@@ -1055,7 +1276,7 @@ export default function RealisationEditor() {
                 deletingItem={deletingItem}
                 onAdd={handleAddVideo}
                 onEdit={handleEditVideo}
-                onDelete={handleDeleteVideo}
+                onDelete={handleRequestDeleteVideo}
                 onReorder={handleReorderVideos}
               />
             )}
@@ -1071,7 +1292,7 @@ export default function RealisationEditor() {
                 deletingItem={deletingItem}
                 onAdd={handleAddPhoto}
                 onEdit={handleEditPhoto}
-                onDelete={handleDeletePhoto}
+                onDelete={handleRequestDeletePhoto}
                 onReorder={handleReorderPhotos}
               />
             )}
@@ -1087,7 +1308,7 @@ export default function RealisationEditor() {
                 deletingItem={deletingItem}
                 onAdd={handleAddDigitalProject}
                 onEdit={handleEditDigitalProject}
-                onDelete={handleDeleteDigitalProject}
+                onDelete={handleRequestDeleteDigitalProject}
                 onReorder={handleReorderDigitalProjects}
               />
             )}
@@ -1128,6 +1349,54 @@ export default function RealisationEditor() {
         onSave={handleSaveDigitalProjectDialog}
         onChange={handleDigitalProjectDialogChange}
         onImageSelect={handleDigitalProjectImageSelect}
+      />
+
+      <ConfirmDialog
+        open={!!deleteConfirmation?.open}
+        isLoading={!!deletingItem}
+        title={
+          deleteConfirmation?.type === "video"
+            ? "Supprimer la vidéo ?"
+            : deleteConfirmation?.type === "photo"
+              ? "Supprimer la photo ?"
+              : "Supprimer le projet ?"
+        }
+        message={
+          <div className="leading-relaxed text-sm text-muted-foreground">
+            Voulez-vous vraiment supprimer{" "}
+            <span
+              className="
+        inline-flex items-center
+        rounded-md
+        bg-red-500/15
+        px-2 py-1
+        font-semibold
+        text-red-500
+        border border-red-500/30
+        shadow-sm
+      "
+            >
+              {deleteConfirmation?.title}
+            </span>{" "}
+            ? Cette action est{" "}
+            <span className="font-semibold text-red-400">irréversible</span>.
+          </div>
+        }
+        confirmText="Supprimer"
+        cancelText="Annuler"
+        isDestructive
+        onConfirm={async () => {
+          if (!deleteConfirmation) return;
+
+          const { type, id } = deleteConfirmation;
+
+          setDeleteConfirmation(null);
+
+          if (type === "video") await handleDeleteVideo(id);
+          if (type === "photo") await handleDeletePhoto(id);
+          if (type === "digitalProject") await handleDeleteDigitalProject(id);
+        }}
+        onCancel={() => setDeleteConfirmation(null)}
       />
 
       {/* Toast */}
