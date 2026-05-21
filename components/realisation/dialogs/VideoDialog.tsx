@@ -22,9 +22,10 @@ import {
   PlayCircleOutline as PlayIcon,
   CalendarToday as CalendarIcon,
   Close as CloseIcon,
+  CloudUpload as UploadIcon,
 } from "@mui/icons-material";
 
-import { VideoItem, VideoDialogState } from "../types";
+import { VideoItem, VideoDialogState, TempDialogImage } from "../types";
 import { THEME, CLIENT_OPTIONS } from "../constants";
 import {
   isValidYouTubeUrl,
@@ -34,20 +35,24 @@ import {
 
 interface VideoDialogProps {
   dialogState: VideoDialogState;
+  tempImage: TempDialogImage | null;  // ✅ NOUVEAU
   isSmall: boolean;
   isUpdating: boolean;
   onClose: () => void;
   onSave: () => void;
   onChange: (data: VideoItem) => void;
+  onImageSelect: (file: File) => void;  // ✅ NOUVEAU
 }
 
 export default function VideoDialog({
   dialogState,
+  tempImage,  // ✅ NOUVEAU
   isSmall,
   isUpdating,
   onClose,
   onSave,
   onChange,
+  onImageSelect,  // ✅ NOUVEAU
 }: VideoDialogProps) {
   const { open, mode, data } = dialogState;
 
@@ -56,6 +61,16 @@ export default function VideoDialog({
   const handleFieldChange = (field: keyof VideoItem, value: string) => {
     onChange({ ...data, [field]: value });
   };
+
+  // ✅ NOUVEAU : Handler pour l'upload du thumbnail
+  const handleThumbnailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      onImageSelect(e.target.files[0]);
+    }
+  };
+
+  // ✅ NOUVEAU : Déterminer quelle image afficher
+  const displayThumbnail = data.thumbnail || (isValidYouTubeUrl(data.videoUrl) ? getYouTubeThumbnail(data.videoUrl) : null);
 
   return (
     <Dialog
@@ -74,8 +89,7 @@ export default function VideoDialog({
     >
       <DialogTitle
         sx={{
-          background:
-            "linear-gradient(135deg, #818660 0%, #9ba17b 50%, #6b7052 100%)",
+          background: THEME.youtube.gradient,
           color: "white",
           display: "flex",
           alignItems: "center",
@@ -84,28 +98,6 @@ export default function VideoDialog({
           px: { xs: 2, sm: 3 },
         }}
       >
-        <Box
-          sx={{
-            position: "absolute",
-            width: 300,
-            height: 300,
-            borderRadius: "50%",
-            bgcolor: "rgba(255,255,255,0.1)",
-            top: -100,
-            right: -50,
-          }}
-        />
-        <Box
-          sx={{
-            position: "absolute",
-            width: 150,
-            height: 150,
-            borderRadius: "50%",
-            bgcolor: "rgba(255,255,255,0.08)",
-            bottom: -30,
-            left: "30%",
-          }}
-        />
         <Stack direction="row" spacing={1.5} alignItems="center">
           <YouTubeIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
           <Typography
@@ -123,8 +115,8 @@ export default function VideoDialog({
 
       <DialogContent sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
         <Stack spacing={{ xs: 2, sm: 3 }} pt={{ xs: 1, sm: 2 }}>
-          {/* Aperçu YouTube */}
-          {isValidYouTubeUrl(data.videoUrl) && (
+          {/* ✅ NOUVEAU : Aperçu Thumbnail */}
+          {displayThumbnail && (
             <Box
               sx={{
                 width: "100%",
@@ -137,13 +129,15 @@ export default function VideoDialog({
             >
               <Box
                 component="img"
-                src={getYouTubeThumbnail(data.videoUrl)}
-                alt="Aperçu YouTube"
+                src={displayThumbnail}
+                alt="Aperçu Thumbnail"
                 sx={{ width: "100%", height: "100%", objectFit: "cover" }}
                 onError={(e: any) => {
-                  const videoId = getYouTubeVideoId(data.videoUrl);
-                  if (videoId) {
-                    e.target.src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+                  if (isValidYouTubeUrl(data.videoUrl)) {
+                    const videoId = getYouTubeVideoId(data.videoUrl);
+                    if (videoId) {
+                      e.target.src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+                    }
                   }
                 }}
               />
@@ -175,6 +169,40 @@ export default function VideoDialog({
               </Box>
             </Box>
           )}
+
+          {/* ✅ NOUVEAU : Upload Custom Thumbnail */}
+          <Box>
+            <Button
+              variant="outlined"
+              component="label"
+              fullWidth
+              startIcon={<UploadIcon />}
+              sx={{
+                textTransform: "none",
+                borderRadius: 2,
+                borderColor: THEME.neutral[300],
+                color: THEME.neutral[700],
+                py: 1.5,
+                "&:hover": {
+                  borderColor: THEME.youtube.main,
+                  bgcolor: "rgba(255, 0, 0, 0.04)",
+                },
+              }}
+            >
+              {data.thumbnail ? "Changer le thumbnail" : "Ajouter un thumbnail personnalisé"}
+              <input
+                type="file"
+                hidden
+                accept="image/*"
+                onChange={handleThumbnailChange}
+              />
+            </Button>
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
+              {data.thumbnail 
+                ? "✅ Thumbnail personnalisé ajouté" 
+                : "Par défaut, le thumbnail YouTube sera utilisé"}
+            </Typography>
+          </Box>
 
           {/* Lien YouTube */}
           <TextField
@@ -227,9 +255,8 @@ export default function VideoDialog({
           />
 
           {/* Client et Date */}
-          <Grid container justifyContent={'space-between'} rowSpacing={{ xs: 2, sm: 0 }}
->
-            <Grid item xs={12} sm={5}>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6}>
               <TextField
                 select
                 label="Client"

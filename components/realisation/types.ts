@@ -6,6 +6,8 @@ export interface VideoItem {
   videoUrl: string;
   client: string;
   date: string;
+  thumbnail?: string;              // ✅ NOUVEAU
+  thumbnailPublicId?: string;      // ✅ NOUVEAU
 }
 
 export interface ImageItem {
@@ -45,7 +47,7 @@ export interface PendingImage {
   file: File;
   previewUrl: string;
   itemId: string;
-  type: "photo" | "digitalProject";
+  type: "photo" | "digitalProject" | "video"; // ✅ MODIFIÉ
   imageIndex?: number;
 }
 
@@ -69,7 +71,6 @@ export interface PhotoDialogState {
   open: boolean;
   mode: "add" | "edit";
   data: PhotoItem | null;
-    originalImages?: ImageItem[];
 }
 
 export interface DigitalProjectDialogState {

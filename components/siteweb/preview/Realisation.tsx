@@ -126,7 +126,7 @@ export default function Realisation() {
         const loadedVideos = (data.videos || [])
           .map((v: any) => ({
             ...v,
-            thumbnail: getYouTubeThumbnail(v.videoUrl),
+            thumbnail: v.thumbnail || getYouTubeThumbnail(v.videoUrl),
             category: "video",
           }))
           .reverse();
@@ -286,7 +286,7 @@ export default function Realisation() {
                   className="group relative aspect-video overflow-hidden rounded-xl bg-card text-left shadow-sm transition-all hover:shadow-lg"
                 >
                   <img
-                    src={video.thumbnail}
+                    src={video.thumbnail || getYouTubeThumbnail(video.videoUrl)}
                     alt={video.title}
                     className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />

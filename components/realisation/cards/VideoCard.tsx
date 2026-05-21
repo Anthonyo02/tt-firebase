@@ -57,7 +57,7 @@ export default function VideoCard({
   onEdit,
   onDelete,
 }: VideoCardProps) {
-  const thumbnail = getYouTubeThumbnail(video.videoUrl);
+  const thumbnail = video.thumbnail || getYouTubeThumbnail(video.videoUrl);
   const isValidUrl = isValidYouTubeUrl(video.videoUrl);
 
   return (

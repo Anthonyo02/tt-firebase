@@ -54,6 +54,8 @@ export function useRealisationData() {
                   videoUrl: v.videoUrl || "",
                   client: v.client || "",
                   date: v.date || v.year || new Date().toISOString().split("T")[0],
+                  thumbnail: v.thumbnail || "",
+                  thumbnailPublicId: v.thumbnailPublicId || "",
                 }))
               : DEFAULT_DATA.videos,
 

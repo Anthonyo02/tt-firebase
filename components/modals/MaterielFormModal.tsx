@@ -211,12 +211,21 @@ const uploadToCloudinary = async (
  */
 const deleteFromCloudinary = async (publicId: string): Promise<void> => {
   if (!publicId) return;
+
   console.log("🗑️ Suppression Cloudinary:", publicId);
-  fetch("/api/cloudinary/delete", {
+
+  const response = await fetch("/api/cloudinary/delete", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ publicId }),
-  }).catch(console.error);
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.error || errorData.message || "Cloudinary deletion failed"
+    );
+  }
 };
 
 // ============================================

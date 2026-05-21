@@ -43,7 +43,6 @@ import { createUserWithEmailAndPassword, getAuth, signOut } from "firebase/auth"
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { getApp, initializeApp } from "firebase/app";
 const functions = getFunctions();
-const createUserFn = httpsCallable(functions, "createUser");
 /* =======================
    THEME (GLOBAL IDENTITY)
 ======================= */
