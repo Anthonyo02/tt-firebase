@@ -1385,6 +1385,10 @@ export default function RealisationEditor() {
         confirmText="Supprimer"
         cancelText="Annuler"
         isDestructive
+        requiredName={deleteConfirmation?.title || undefined}
+        confirmationLabel="Réécrivez le nom exact de l’élément"
+        confirmationPlaceholder={deleteConfirmation?.title || "Nom de l'élément"}
+        confirmationHelperText="Le bouton Supprimer sera activé uniquement si le nom correspond exactement."
         onConfirm={async () => {
           if (!deleteConfirmation) return;
 

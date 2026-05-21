@@ -1,4 +1,4 @@
-import React, { ReactNode } from "react";
+import React, { ReactNode, useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,6 +10,7 @@ import {
   IconButton,
   Slide,
   Avatar,
+  TextField,
 } from "@mui/material";
 import {
   Warning,
@@ -24,12 +25,16 @@ interface ConfirmDialogProps {
   open: boolean;
   isLoading: boolean;
   title: string;
-   message: ReactNode;
+  message: ReactNode;
   onConfirm: () => void;
   onCancel: () => void;
   confirmText?: string;
   cancelText?: string;
   isDestructive?: boolean;
+  requiredName?: string;
+  confirmationLabel?: string;
+  confirmationPlaceholder?: string;
+  confirmationHelperText?: string;
 }
 
 // Transition animation
@@ -50,7 +55,24 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   confirmText = "Confirmer",
   cancelText = "Annuler",
   isDestructive = true,
+  requiredName,
+  confirmationLabel,
+  confirmationPlaceholder,
+  confirmationHelperText,
 }) => {
+  const [confirmationText, setConfirmationText] = useState("");
+
+  useEffect(() => {
+    if (!open) {
+      setConfirmationText("");
+    }
+  }, [open]);
+
+  const shouldConfirm = requiredName
+    ? confirmationText.trim() === requiredName.trim()
+    : true;
+
+  const isConfirmDisabled = isLoading || !shouldConfirm;
   // Couleurs selon le type
   const colors = isDestructive
     ? {
@@ -187,6 +209,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
         {/* Message */}
         <Typography
+          component="div"
           sx={{
             color: "text.secondary",
             fontSize: "0.95rem",
@@ -195,6 +218,23 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         >
           {message}
         </Typography>
+
+        {requiredName && (
+          <TextField
+            fullWidth
+            size="small"
+            label={confirmationLabel || "Confirmez en réécrivant le nom"}
+            placeholder={confirmationPlaceholder || requiredName}
+            value={confirmationText}
+            onChange={(event) => setConfirmationText(event.target.value)}
+            helperText={
+              confirmationHelperText ||
+              `Le bouton Supprimer sera activé uniquement si le nom correspond exactement à : ${requiredName}`
+            }
+            error={confirmationText !== "" && !shouldConfirm}
+            sx={{ mt: 3 }}
+          />
+        )}
 
         {/* Avertissement supplémentaire pour destructif */}
         {isDestructive && (
@@ -263,7 +303,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         <Button
           variant="contained"
           onClick={onConfirm}
-          disabled={isLoading}
+          disabled={isConfirmDisabled}
           sx={{
             flex: 1,
             py: 1.5,
